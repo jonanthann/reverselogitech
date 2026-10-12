@@ -5,3 +5,11 @@ __pycache__/
 painel_dados/
 docs/superpowers/
 /prox2_backup_perfis.json
+debian/.debhelper/
+debian/prox2/
+debian/files
+debian/*.debhelper
+debian/*.debhelper.log
+debian/*.substvars
+debian/debhelper-build-stamp
+docs/handoff/
