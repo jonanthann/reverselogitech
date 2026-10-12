@@ -76,8 +76,15 @@ class Painel:
             raise ErroPainel(f"Backup falhou ({e}), nada foi gravado no mouse.")
 
     def _salvar_backup(self):
-        # guarda os setores como estão (crc=False), no formato JSON do prox2; nunca sobrescreve
-        bk = {f"{s:#06x}": self.m.ler_setor(s, crc=False).hex() for s in range(0, 6)}
+        # formato JSON do prox2; nunca sobrescreve. Lê com CRC (que já relê);
+        # só se falhar guarda o setor como está (crc=False)
+        bk = {}
+        for s in range(0, 6):
+            try:
+                d = self.m.ler_setor(s)
+            except IOError:
+                d = self.m.ler_setor(s, crc=False)
+            bk[f"{s:#06x}"] = d.hex()
         tmp = self.backup + ".tmp"
         try:
             with open(tmp, "w") as f:

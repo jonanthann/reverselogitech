@@ -390,17 +390,25 @@ def cmd_backup(m, a):
 def cmd_restaurar(m, a):
     with open(a.arquivo) as f:
         bk = {int(k, 16): bytes.fromhex(v) for k, v in json.load(f).items()}
-    difer, antes = [], {}
+    difer, antes, pulados = [], {}, []
     for sec in range(1, 6):
         if sec not in bk:
             continue
-        if len(bk[sec]) != m.size or not crc_ok(bk[sec]):
-            sys.exit(f"Setor {sec} do arquivo inválido (tamanho ou CRC). Nada foi gravado.")
+        if len(bk[sec]) != m.size:
+            sys.exit(f"Setor {sec} do arquivo inválido (tamanho). Nada foi gravado.")
+        if not crc_ok(bk[sec]):
+            print(f"Setor {sec} do backup tem CRC inválido, pulado.")
+            pulados.append(sec)
+            continue
         antes[sec] = m.ler_setor(sec, crc=False)
         if antes[sec] != bk[sec]:
             difer.append(sec)
+    if not antes:
+        print("Nenhum setor válido no arquivo, nada foi gravado.")
+        return
     if not difer:
-        print("Mouse já igual ao arquivo, nada a fazer.")
+        print("Mouse já igual ao arquivo nos setores válidos, nada a fazer.")
+        avisar_pulados(pulados)
         return
     print("Setores que serão regravados:", ", ".join(map(str, difer)))
     if not a.sim and input("Continuar? (s/N) ").strip().lower() != "s":
@@ -421,6 +429,13 @@ def cmd_restaurar(m, a):
         m.definir_perfil(original)
         time.sleep(0.5)
     print("Taxa atual:", hz(m.taxa_atual()))
+    avisar_pulados(pulados)
+
+
+def avisar_pulados(pulados):
+    if pulados:
+        print(f"Atenção: setores {', '.join(map(str, pulados))} NÃO foram restaurados, o backup não tem "
+              "cópia válida deles. Use \"Restaurar\" no painel para voltar essas vagas ao padrão de fábrica.")
 
 
 def cmd_painel(m, a):

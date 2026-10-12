@@ -46,6 +46,32 @@ class TestCorrecoesFinais(Base):
             bk = json.load(f)
         self.assertEqual(sorted(bk), [f"{s:#06x}" for s in range(6)])
 
+    def test_backup_com_setor_crc_ruim_guarda_os_bons_integros(self):
+        estragar_crc(self.mouse, 2)
+        self.painel._salvar_backup()
+        with open(self.backup) as f:
+            bk = json.load(f)
+        self.assertEqual(bk["0x0002"], self.mouse.setores[2].hex())
+        for s in (0, 1, 3, 4, 5):
+            self.assertEqual(bk[f"{s:#06x}"], B[s].hex())
+
+    def test_backup_prefere_leitura_com_crc(self):
+        # leitura crc=False devolve lixo passageiro, crc=True (com releitura) devolve o setor bom
+        bom = self.mouse.setores[3]
+        ruim = bytearray(bom)
+        ruim[10] ^= 0xFF
+        orig = self.mouse.ler_setor
+
+        def ler(sec, crc=True):
+            if sec == 3 and not crc:
+                return bytes(ruim)
+            return orig(sec, crc)
+
+        self.mouse.ler_setor = ler
+        self.painel._salvar_backup()
+        with open(self.backup) as f:
+            self.assertEqual(json.load(f)["0x0003"], bom.hex())
+
     def test_erro_original_nao_e_trocado_por_timeout(self):
         self.mouse.falhar_gravacao_em = 1
         orig = self.mouse.definir_perfil
