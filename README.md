@@ -4,7 +4,14 @@ Versão traduzida para português: [README.pt-BR.md](README.pt-BR.md)
 
 This project reverse engineers the HID++ protocol of the Logitech PRO X 2 Superlight (wireless, Lightspeed USB receiver `046d:c54d`) so you can use its onboard memory (onboard profiles) on Linux, specifically Debian. The tools change the polling rate and DPI without turning off the onboard profiles. Everything talks HID++ 2.0 directly to the receiver's hidraw device.
 
-The receiver's `/dev/hidraw` node is usually root-only. Open it up (e.g. `sudo chmod a+rw /dev/hidraw6`, the number varies) or run the commands with sudo.
+The receiver's `/dev/hidraw` node is usually root-only. To open it up for your user, install the udev rule from the repository:
+
+```
+sudo cp udev/70-prox2-hidraw.rules /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger
+```
+
+Then unplug and replug the receiver. As a temporary alternative, `sudo chmod a+rw /dev/hidraw6` (the number varies) or running the commands with sudo.
 
 Note: the program's interface (command names, options and output messages) is in Portuguese.
 
@@ -29,6 +36,12 @@ Profiles 1 and 2 are set to 2000 Hz and 1600 DPI, stored in the onboard memory. 
 | `testar_polling_raw.py` | Counts raw packets from the receiver for 10 s. With hidraw access opened, it runs without sudo. This is the best way to measure. |
 | `testar_polling.py` | Measures through evdev. Needs sudo. |
 | `testar_host_mode.py` | Diagnostic: tests the rate in host mode. |
+| `painel_web.py` | The panel's server. |
+| `painel_core.py` | The panel's write rules. |
+| `perfil.py` | Reads and builds the profile sectors. |
+| `painel/index.html` | The panel's page. |
+| `udev/70-prox2-hidraw.rules` | udev rule that opens the receiver's hidraw to your user. |
+| `tests/` | Tests, run with `python3 -m unittest discover -s tests`. They do not use the mouse. |
 
 ## Quick usage
 
@@ -36,6 +49,7 @@ Profiles 1 and 2 are set to 2000 Hz and 1600 DPI, stored in the onboard memory. 
 python3 prox2.py status
 python3 prox2.py rate 2000
 python3 prox2.py rate 2000 --perfil 1
+python3 prox2.py rate 2000 --perfil 1 2
 python3 prox2.py dpi 1600
 python3 prox2.py dpi 1600 --perfil 1
 python3 prox2.py backup arquivo.json
@@ -43,14 +57,35 @@ python3 prox2.py restaurar arquivo.json [--sim]
 ```
 
 - `status` shows the current state of the profiles.
-- `rate N` writes the rate in Hz. By default it applies to all active profiles. With `--perfil N`, only to that profile.
-- `dpi N` writes the DPI (X and Y equal). By default it applies to all active profiles. With `--perfil N`, only to that profile. It only accepts profiles with a single DPI level, because the index of the active level has not been confirmed yet. Values outside the sensor's ranges are rejected, with a suggestion of the closest ones.
+- `rate N` writes the rate in Hz. By default it applies to all active profiles. With `--perfil N` (one or more sectors, 1 to 5), only to those profiles.
+- `dpi N` writes the DPI (X and Y equal). By default it applies to all active profiles. With `--perfil N` (one or more sectors, 1 to 5), only to those profiles. It only accepts profiles with a single DPI level, because the index of the active level has not been confirmed yet. Values outside the sensor's ranges are rejected, with a suggestion of the closest ones.
 - `backup` saves the profiles to a JSON file.
-- `restaurar` (restore) writes the profiles from a JSON file back to the mouse. The `--sim` (yes) option is optional.
+- `restaurar` (restore) writes the profiles from a JSON file back to the mouse. The `--sim` (yes) option is optional. Sectors with an invalid CRC in the file are skipped with a warning, and the rest are restored.
 
 On the first write, `prox2.py` creates the automatic backup `prox2_backup_perfis.json`. If the file already exists, it is not overwritten.
 
 Rates above 2000 Hz use more battery. The firmware (MPM 32.05) supports 4000 and 8000 Hz, but those rates have not been tested.
+
+## Local panel
+
+```
+python3 prox2.py painel
+```
+
+This opens your browser on a local page. The server listens only on 127.0.0.1, and the URL carries a key. Options: `--porta N` sets the port, and `--sem-navegador` does not open the browser and prints the URL instead. Closing the tab stops the server within 2 minutes, or you can press Ctrl+C. Once it is closed, the mouse keeps using what is stored in its memory, on any PC.
+
+The page shows the 5 slots (profiles) of the onboard memory side by side. Click one to open the editor: DPI, polling rate, LOD (low, medium, high), name (up to 24 characters, stored on the mouse itself) and on/off for the slot ("Vaga ativa" checkbox). The buttons:
+
+- "Gravar no mouse" (write to the mouse): writes and checks by reading back.
+- "Usar agora" (use now): switches the profile in use. The choice stays after the mouse is turned off.
+- "Restaurar" (restore): asks for confirmation ("Sim, restaurar" or "Cancelar"), then puts the slot back to the factory default, read from the mouse's ROM: 800 to 3200 DPI in 5 levels, 1000 Hz, medium LOD.
+- "Usar um DPI só" (use a single DPI): appears on profiles with several DPI levels.
+
+Limits: to edit the DPI of a profile with several levels you have to click "Usar um DPI só", because the index of the active level has not been confirmed yet. You cannot turn off the slot in use or the last active one. Buttons and macros are not supported.
+
+Safety: before the first write, the original backup is saved to `prox2_backup_perfis.json`. A copy of each previous sector goes to `painel_dados/historico/`.
+
+The panel interface is in Portuguese, like the rest of the program.
 
 ## How to measure
 
@@ -96,9 +131,10 @@ Each profile takes sectors 1..5, with 255 bytes. The last 2 bytes are the CRC-CC
 | 1 | Rate the mouse reports (`getReportRate` of feature 0x8061) |
 | 2 and 3 | Not confirmed yet |
 | 4 onward | DPI: 5 entries of 5 bytes |
+| 160 to 207 | Profile name, UTF-16LE (`ff` = no name) |
 | 253 and 254 | CRC |
 
-Each DPI entry has X (2 bytes, little-endian), Y (2 bytes, little-endian) and 1 byte that is probably the lift-off distance.
+Each DPI entry has X (2 bytes, little-endian), Y (2 bytes, little-endian) and 1 byte with the LOD (lift-off distance). The LOD of entry k is at byte 8+5k: 1 is low, 2 is medium, 3 is high. This was confirmed on the sensor and in a physical test.
 
 The rate values are indexes:
 
@@ -120,6 +156,13 @@ This is how it was shown:
 
 1. In host mode, the directly requested rate gave about 1870 packets/s, so the mouse was capable of 2000 Hz.
 2. With bytes 0 and 1 written to the profile, the measurement gave about 1975 packets/s.
+
+### Directory, factory profile and profile in use
+
+- Sector 0 (the directory) has its own CRC. Byte 2 of each entry turns the slot on or off.
+- The mouse refuses to use a slot that is turned off.
+- The factory profile is in the ROM, sector `0x0101`. The ROM's CRC does not match, so it has to be recalculated.
+- The choice of the profile in use persists after the mouse is turned off.
 
 ## Why Solaar fails
 

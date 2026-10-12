@@ -4,7 +4,14 @@
 
 Engenharia reversa do protocolo HID++ do Logitech PRO X 2 Superlight (sem fio, receptor Lightspeed USB `046d:c54d`), para facilitar o uso da memória interna (onboard profiles) no Linux, especificamente no Debian. As ferramentas trocam o polling rate e o DPI sem desativar os perfis da memória interna. Tudo fala HID++ 2.0 direto com o hidraw do receptor.
 
-O `/dev/hidraw` do receptor costuma vir só para root. Libere o acesso (ex.: `sudo chmod a+rw /dev/hidraw6`, o número varia) ou rode os comandos com sudo.
+O `/dev/hidraw` do receptor costuma vir só para root. Para liberar o acesso ao seu usuário, instale a regra udev do repositório:
+
+```
+sudo cp udev/70-prox2-hidraw.rules /etc/udev/rules.d/
+sudo udevadm control --reload && sudo udevadm trigger
+```
+
+Depois, reconecte o receptor. Como alternativa temporária, `sudo chmod a+rw /dev/hidraw6` (o número varia) ou rodar os comandos com sudo.
 
 ## O problema
 
@@ -27,6 +34,12 @@ Os perfis 1 e 2 ficaram em 2000 Hz e 1600 DPI, gravados na memória interna. A c
 | `testar_polling_raw.py` | Conta pacotes crus do receptor por 10 s. Com o hidraw liberado, roda sem sudo. É a melhor forma de medir. |
 | `testar_polling.py` | Mede pelo evdev. Precisa de sudo. |
 | `testar_host_mode.py` | Diagnóstico: testa a taxa em modo host. |
+| `painel_web.py` | Servidor do painel. |
+| `painel_core.py` | Regras de gravação do painel. |
+| `perfil.py` | Leitura e montagem dos setores de perfil. |
+| `painel/index.html` | Página do painel. |
+| `udev/70-prox2-hidraw.rules` | Regra udev que libera o hidraw do receptor para o seu usuário. |
+| `tests/` | Testes, rodam com `python3 -m unittest discover -s tests`. Não usam o mouse. |
 
 ## Uso rápido
 
@@ -34,6 +47,7 @@ Os perfis 1 e 2 ficaram em 2000 Hz e 1600 DPI, gravados na memória interna. A c
 python3 prox2.py status
 python3 prox2.py rate 2000
 python3 prox2.py rate 2000 --perfil 1
+python3 prox2.py rate 2000 --perfil 1 2
 python3 prox2.py dpi 1600
 python3 prox2.py dpi 1600 --perfil 1
 python3 prox2.py backup arquivo.json
@@ -41,14 +55,35 @@ python3 prox2.py restaurar arquivo.json [--sim]
 ```
 
 - `status` mostra o estado atual dos perfis.
-- `rate N` grava a taxa em Hz. Por padrão vale para todos os perfis ativos. Com `--perfil N`, só para aquele perfil.
-- `dpi N` grava o DPI (X e Y iguais). Por padrão vale para todos os perfis ativos. Com `--perfil N`, só para aquele perfil. Só aceita perfis com um único nível de DPI, porque o índice do nível ativo ainda não foi confirmado. Valores fora das faixas do sensor são recusados, com sugestão dos mais próximos.
+- `rate N` grava a taxa em Hz. Por padrão vale para todos os perfis ativos. Com `--perfil N` (um ou mais setores, de 1 a 5), só para esses perfis.
+- `dpi N` grava o DPI (X e Y iguais). Por padrão vale para todos os perfis ativos. Com `--perfil N` (um ou mais setores, de 1 a 5), só para esses perfis. Só aceita perfis com um único nível de DPI, porque o índice do nível ativo ainda não foi confirmado. Valores fora das faixas do sensor são recusados, com sugestão dos mais próximos.
 - `backup` salva os perfis num arquivo JSON.
-- `restaurar` grava de volta os perfis de um arquivo JSON. A opção `--sim` é opcional.
+- `restaurar` grava de volta os perfis de um arquivo JSON. A opção `--sim` é opcional. Setores do arquivo com CRC inválido são pulados com aviso, e os demais são restaurados.
 
 Na primeira gravação, o `prox2.py` cria o backup automático `prox2_backup_perfis.json`. Se o arquivo já existir, ele não é sobrescrito.
 
 Taxas acima de 2000 Hz consomem mais bateria. O firmware (MPM 32.05) suporta 4000 e 8000 Hz, mas essas taxas não foram testadas.
+
+## Painel local
+
+```
+python3 prox2.py painel
+```
+
+Abre o navegador numa página local. O servidor escuta só em 127.0.0.1, e a URL leva uma chave. Opções: `--porta N` define a porta, e `--sem-navegador` não abre o navegador e imprime a URL. Fechar a aba encerra o servidor em até 2 minutos, ou use Ctrl+C. Depois de fechado, o mouse continua usando o que está gravado na memória, em qualquer PC.
+
+A página mostra as 5 vagas (perfis) da memória interna lado a lado. Clique numa para abrir o editor: DPI, polling rate, LOD (baixo, médio, alto), nome (até 24 caracteres, gravado no próprio mouse) e ligar/desligar a vaga (caixa "Vaga ativa"). Os botões:
+
+- "Gravar no mouse": grava e confere relendo.
+- "Usar agora": troca o perfil em uso. A escolha continua depois de desligar o mouse.
+- "Restaurar": pede confirmação ("Sim, restaurar" ou "Cancelar") e então volta a vaga ao padrão de fábrica, lido da ROM do mouse: 800 a 3200 DPI em 5 níveis, 1000 Hz, LOD médio.
+- "Usar um DPI só": aparece em perfis com vários níveis de DPI.
+
+Limites: para editar o DPI de um perfil com vários níveis é preciso clicar em "Usar um DPI só", porque o índice do nível ativo ainda não foi confirmado. Não dá para desligar a vaga em uso nem a última ativa. Botões e macros não são suportados.
+
+Segurança: antes da primeira gravação, o backup original vai para `prox2_backup_perfis.json`. Uma cópia de cada setor anterior vai para `painel_dados/historico/`.
+
+A interface do painel é em português, como o resto do programa.
 
 ## Como medir
 
@@ -94,9 +129,10 @@ Cada perfil ocupa os setores 1..5, com 255 bytes. Os 2 últimos bytes são o CRC
 | 1 | Taxa que o mouse informa (`getReportRate` da feature 0x8061) |
 | 2 e 3 | Ainda não confirmados |
 | 4 em diante | DPI: 5 entradas de 5 bytes |
+| 160 a 207 | Nome do perfil, UTF-16LE (`ff` = sem nome) |
 | 253 e 254 | CRC |
 
-Cada entrada de DPI tem X (2 bytes, little-endian), Y (2 bytes, little-endian) e 1 byte que provavelmente é o lift-off.
+Cada entrada de DPI tem X (2 bytes, little-endian), Y (2 bytes, little-endian) e 1 byte com o LOD (lift-off). O LOD da entrada k fica no byte 8+5k: 1 é baixo, 2 é médio, 3 é alto. Foi confirmado no sensor e num teste físico.
 
 Os valores de taxa são índices:
 
@@ -118,6 +154,13 @@ Foi assim que isso foi provado:
 
 1. No modo host, a taxa pedida direto deu cerca de 1870 pacotes/s, então o mouse era capaz de 2000 Hz.
 2. Com os bytes 0 e 1 gravados no perfil, a medição deu cerca de 1975 pacotes/s.
+
+### Diretório, perfil de fábrica e perfil em uso
+
+- O setor 0 (o diretório) tem CRC próprio. O byte 2 de cada entrada liga ou desliga a vaga.
+- O mouse recusa usar uma vaga desligada.
+- O perfil de fábrica está na ROM, no setor `0x0101`. O CRC da ROM não bate, então é preciso recalcular.
+- A escolha do perfil em uso persiste ao desligar o mouse.
 
 ## Por que o Solaar falha
 
