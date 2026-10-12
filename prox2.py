@@ -4,12 +4,13 @@ PRO X 2 Superlight, via HID++ 2.0 em hidraw. Só stdlib, sem sudo.
 
 Uso:
   prox2.py status
+  prox2.py bateria [--seguir]
   prox2.py rate <hz> [--perfil N ...]   (N = número do setor, 1..5)
   prox2.py dpi <n> [--perfil N ...]
   prox2.py backup <arquivo.json>
   prox2.py restaurar <arquivo.json> [--sim]
 """
-import argparse, json, os, select, struct, sys, time
+import argparse, contextlib, errno, fcntl, json, os, queue, select, struct, sys, tempfile, threading, time
 
 SWID = 0x0A
 RATES = [125, 250, 500, 1000, 2000, 4000, 8000]
@@ -39,6 +40,18 @@ def com_crc(setor):
     return bytes(b)
 
 
+class ErroMouse(IOError):
+    """Herda de IOError para os rollbacks e os except (TimeoutError, IOError) cobrirem o mouse."""
+
+
+class TravaOcupada(ErroMouse):
+    """Outro processo segura o flock de gravação."""
+
+
+class MouseInalcancavel(ErroMouse):
+    """Mouse desligado, fora de alcance ou desconectado do receptor."""
+
+
 def achar_no_hidpp():
     """Acha o hidraw HID++ do receptor 046d:c54d pelo report descriptor."""
     for n in sorted(os.listdir("/sys/class/hidraw")):
@@ -53,45 +66,290 @@ def achar_no_hidpp():
             continue  # nó do mouse
         if b"\x85\x11" in desc:
             return f"/dev/{n}"
-    sys.exit("Receptor HID++ não encontrado (mouse ligado?).")
+    raise ErroMouse("Receptor HID++ não encontrado (mouse ligado?).")
 
 
 class Mouse:
-    def __init__(self, idx=1):
+    def __init__(self, idx=1, caminho=None, fd=None, leitor=False, abrir=None,
+                 arq_trava=None, espera_trava=5.0, intervalo_reabrir=5.0):
+        """leitor=True inicia a thread leitora (eventos + reconexão). abrir: fábrica de fd para
+        reabrir após desconexão (padrão: achar_no_hidpp). arq_trava: arquivo do flock de gravação."""
         self.idx = idx
-        self.fd = os.open(achar_no_hidpp(), os.O_RDWR)
+        self._abrir = abrir or self._abrir_padrao
+        self._proprio = fd is None
+        if fd is None:
+            caminho = caminho or achar_no_hidpp()
+            fd = os.open(caminho, os.O_RDWR)
+        self.caminho = caminho
+        self.fd = fd
+        self._arq_trava = arq_trava
+        self._espera_trava = espera_trava
+        self._intervalo_reabrir = intervalo_reabrir
+        self._caps_bateria = None
         self.feat = {}
+        self._lock = threading.RLock()
+        self._prof_trava = 0
+        self._fd_trava = None
+        self._pend = None
+        self._swid = 0
+        self._trava_fd = threading.Lock()
+        self._thread = None
+        self._parar = threading.Event()
+        self._conectado = True
+        self._cb_evento, self._cb_bateria, self._cb_conexao, self._cb_estado = [], [], [], []
+        self._iniciar_features()
+        if leitor:
+            self.iniciar_leitor()
+
+    def _abrir_padrao(self):
+        self.caminho = achar_no_hidpp()
+        return os.open(self.caminho, os.O_RDWR)
+
+    def _proximo_swid(self):
+        # 1..15, nunca 0 (0 é evento); respostas atrasadas de outra requisição não casam
+        self._swid = self._swid % 15 + 1
+        return self._swid
+
+    def _carregar_caps_bateria(self):
+        import bateria
+        f = self.fi(0x1004)
+        if f is not None:
+            self._caps_bateria = bateria.decodificar_caps(self.req(f, 0))
+
+    def _iniciar_features(self):
+        self.feat = {}
+        self._caps_bateria = None
         self.op = self.fi(0x8100)
         self.rr = self.fi(0x8061)
         if self.op is None or self.rr is None:
-            sys.exit("Mouse sem as features 0x8100/0x8061.")
+            raise ErroMouse("Mouse sem as features 0x8100/0x8061.")
         self.size = struct.unpack(">H", self.req(self.op, 0)[7:9])[0]
 
-    def req(self, fidx, func, params=b"", timeout=1.0, retry=True):
-        for t in range(4 if retry else 1):
+    # callbacks (chamados na thread leitora: não fazer requisições dentro deles)
+    def ao_evento(self, fn):
+        self._cb_evento.append(fn)
+
+    def ao_bateria(self, fn):
+        self._cb_bateria.append(fn)
+
+    def ao_conexao(self, fn):
+        self._cb_conexao.append(fn)
+
+    def ao_estado(self, fn):
+        self._cb_estado.append(fn)
+
+    @staticmethod
+    def _chamar(lista, *args):
+        for fn in list(lista):
             try:
-                return self._req(fidx, func, params, timeout)
-            except TimeoutError:
-                if t == 3 or not retry:
+                fn(*args)
+            except Exception:
+                pass
+
+    def iniciar_leitor(self):
+        if self._thread is None:
+            self._parar.clear()
+            self._thread = threading.Thread(target=self._laco, name="leitor-prox2", daemon=True)
+            self._thread.start()
+
+    def fechar(self):
+        self._parar.set()
+        t, self._thread = self._thread, None
+        if t is not None and t is not threading.current_thread():
+            t.join(5)
+        self._fechar_fd()
+
+    def _fechar_fd(self):
+        with self._trava_fd:
+            fd, self.fd = self.fd, None
+        if fd is not None and self._proprio:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def _eh_leitor(self):
+        return self._thread is not None and threading.current_thread() is self._thread
+
+    def _laco(self):
+        while not self._parar.is_set():
+            fd = self.fd
+            if fd is None:
+                if self._parar.wait(self._intervalo_reabrir):
+                    break
+                self._reabrir()
+                continue
+            try:
+                if not select.select([fd], [], [], 0.2)[0]:
+                    continue
+                d = os.read(fd, 64)
+            except (OSError, ValueError):
+                d = b""
+            if not d:
+                self._desconectar()
+                continue
+            self._classificar(d)
+
+    def _desconectar(self):
+        # sem o lock: um solicitante pode estar esperando a resposta com ele seguro
+        self._conectado = False
+        p = self._pend
+        if p:
+            p[2].put(MouseInalcancavel("Mouse desconectado."))
+        self._fechar_fd()
+        self._chamar(self._cb_estado, "desconectado")
+
+    def _reabrir(self):
+        with self._lock:
+            try:
+                fd = self._abrir()
+                with self._trava_fd:
+                    if self._parar.is_set():  # fechar() já rodou: não deixa fd aberto
+                        os.close(fd)
+                        return
+                    self._proprio = True
+                    self.fd = fd
+                self._iniciar_features()
+                self._carregar_caps_bateria()
+            except (ErroMouse, OSError, TimeoutError):
+                self._fechar_fd()
+                return
+            self._conectado = True
+        self._chamar(self._cb_estado, "conectado")
+
+    def _classificar(self, d):
+        if len(d) < 6 or d[0] not in (0x10, 0x11) or d[1] != self.idx:
+            return
+        p = self._pend
+        if d[2] == 0x8F:  # erro HID++ 1.0: só vale se casar com a requisição pendente
+            if p and d[3] == p[0] and d[4] == p[1]:
+                p[2].put(MouseInalcancavel("Mouse desligado ou fora de alcance."))
+            return
+        if d[2] == 0xFF and p and d[3] == p[0] and d[4] == p[1]:
+            p[2].put(IOError(f"erro HID++ {d[5]:#x} (fidx={p[0]}, func={p[1] >> 4})"))
+            return
+        if d[2] == 0x41 and d[0] == 0x10:  # HID++ 1.0: conexão do dispositivo
+            self._chamar(self._cb_evento, d)
+            self._chamar(self._cb_conexao, not d[4] & 0x40)
+            return
+        if d[3] & 0x0F:  # resposta: só a da requisição pendente, as atrasadas são descartadas
+            if p and d[0] == 0x11 and d[2] == p[0] and d[3] == p[1]:
+                p[2].put(d[4:20])
+            return
+        self._chamar(self._cb_evento, d)
+        if d[2] == self.feat.get(0x1004) and d[3] >> 4 == 0:
+            import bateria
+            info = bateria.decodificar_evento(d, self._caps_bateria)
+            if info:
+                self._chamar(self._cb_bateria, info)
+
+    @contextlib.contextmanager
+    def transacao(self, gravando=False):
+        """Segura o lock das requisições; com gravando=True pega também o flock entre processos."""
+        with self._lock:
+            if gravando and self._prof_trava == 0:
+                self._pegar_flock()
+            self._prof_trava += gravando
+            try:
+                yield self
+            finally:
+                if gravando:
+                    self._prof_trava -= 1
+                    if self._prof_trava == 0:
+                        self._soltar_flock()
+
+    def _caminho_trava(self):
+        if self._arq_trava:
+            return self._arq_trava
+        base = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
+        return os.path.join(base, "myprox2.lock")
+
+    def _pegar_flock(self):
+        fd = os.open(self._caminho_trava(), os.O_RDWR | os.O_CREAT, 0o600)
+        fim = time.monotonic() + self._espera_trava
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self._fd_trava = fd
+                return
+            except OSError as e:
+                if e.errno not in (errno.EAGAIN, errno.EACCES) or time.monotonic() >= fim:
+                    os.close(fd)
+                    if e.errno in (errno.EAGAIN, errno.EACCES):
+                        raise TravaOcupada("Outro programa (CLI, painel ou app) está gravando no mouse. Tente de novo em instantes.")
                     raise
+                time.sleep(0.05)
+
+    def _soltar_flock(self):
+        fd, self._fd_trava = self._fd_trava, None
+        os.close(fd)  # fechar libera o flock
+
+    def req(self, fidx, func, params=b"", timeout=1.0, retry=True):
+        with self._lock:
+            for t in range(4 if retry else 1):
+                try:
+                    return self._req(fidx, func, params, timeout)
+                except TimeoutError:
+                    if t == 3 or not retry:
+                        raise
 
     def _req(self, fidx, func, params, timeout):
-        pkt = (bytes([0x11, self.idx, fidx, (func << 4) | SWID]) + params).ljust(20, b"\0")
+        if self._thread is not None and not self._eh_leitor():
+            return self._req_fila(fidx, func, params, timeout)
+        return self._req_direto(fidx, func, params, timeout)
+
+    def _pacote(self, fidx, func, params, swid):
+        return (bytes([0x11, self.idx, fidx, (func << 4) | swid]) + params).ljust(20, b"\0")
+
+    def _req_fila(self, fidx, func, params, timeout):
+        q = queue.Queue()
+        swid = self._proximo_swid()
+        with self._trava_fd:  # fd capturado e escrito sob a trava: fechar_fd não corre junto
+            fd = self.fd
+            if not self._conectado or fd is None:
+                raise MouseInalcancavel("Mouse desconectado.")
+            self._pend = (fidx, (func << 4) | swid, q)
+            try:
+                os.write(fd, self._pacote(fidx, func, params, swid))
+            except OSError as e:
+                self._pend = None
+                raise MouseInalcancavel(f"Mouse desconectado ({e.strerror}).")
+        try:
+            try:
+                r = q.get(timeout=timeout)
+            except queue.Empty:
+                raise TimeoutError(f"sem resposta (fidx={fidx}, func={func})")
+        finally:
+            self._pend = None
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+    def _req_direto(self, fidx, func, params, timeout):
+        swid = self._proximo_swid()
+        pkt = self._pacote(fidx, func, params, swid)
+        with self._trava_fd:
+            fd = self.fd
+        if fd is None:
+            raise MouseInalcancavel("Mouse desconectado.")
+        alvo = (func << 4) | swid
         # esvazia respostas atrasadas para não casar com a requisição errada
-        while select.select([self.fd], [], [], 0)[0]:
-            os.read(self.fd, 64)
-        os.write(self.fd, pkt)
+        while select.select([fd], [], [], 0)[0]:
+            os.read(fd, 64)
+        os.write(fd, pkt)
         fim = time.monotonic() + timeout
         while True:
             resto = fim - time.monotonic()
-            if resto <= 0 or not select.select([self.fd], [], [], resto)[0]:
+            if resto <= 0 or not select.select([fd], [], [], resto)[0]:
                 raise TimeoutError(f"sem resposta (fidx={fidx}, func={func})")
-            d = os.read(self.fd, 64)
-            if len(d) < 6 or d[1] != self.idx:
+            d = os.read(fd, 64)
+            if len(d) < 6 or d[1] != self.idx or d[0] not in (0x10, 0x11):
                 continue
-            if d[0] in (0x10, 0x11) and d[2] == 0xFF and d[3] == fidx and d[4] == ((func << 4) | SWID):
+            if d[2] == 0x8F and d[3] == fidx and d[4] == alvo:
+                raise MouseInalcancavel("Mouse desligado ou fora de alcance.")
+            if d[2] == 0xFF and d[3] == fidx and d[4] == alvo:
                 raise IOError(f"erro HID++ {d[5]:#x} (fidx={fidx}, func={func})")
-            if d[0] == 0x11 and d[2] == fidx and d[3] == ((func << 4) | SWID):
+            if d[0] == 0x11 and d[2] == fidx and d[3] == alvo:
                 return d[4:20]
 
     def fi(self, fid):
@@ -120,16 +378,17 @@ class Mouse:
 
     def gravar_setor(self, sec, data):
         assert len(data) == self.size
-        for t in range(2):
-            try:
-                self.req(self.op, 6, struct.pack(">HHH", sec, 0, self.size), retry=False)
-                for i in range(0, self.size, 16):
-                    self.req(self.op, 7, data[i:i + 16].ljust(16, b"\0"), retry=False)
-                self.req(self.op, 8, retry=False)
-                return
-            except (TimeoutError, IOError):
-                if t == 1:
-                    raise
+        with self.transacao(gravando=True):
+            for t in range(2):
+                try:
+                    self.req(self.op, 6, struct.pack(">HHH", sec, 0, self.size), retry=False)
+                    for i in range(0, self.size, 16):
+                        self.req(self.op, 7, data[i:i + 16].ljust(16, b"\0"), retry=False)
+                    self.req(self.op, 8, retry=False)
+                    return
+                except (TimeoutError, IOError):
+                    if t == 1:
+                        raise
 
     def gravar_verificado(self, sec, data):
         self.gravar_setor(sec, data)
@@ -159,6 +418,16 @@ class Mouse:
 
     def taxa_atual(self):
         return self.req(self.rr, 2)[0]
+
+    def bateria(self):
+        """Lê a bateria (feature 0x1004). Devolve o dict de bateria.decodificar_status, ou None sem a feature."""
+        import bateria
+        f = self.fi(0x1004)
+        if f is None:
+            return None
+        if self._caps_bateria is None:
+            self._carregar_caps_bateria()
+        return bateria.decodificar_status(self.req(f, 1), self._caps_bateria)
 
     def nome(self):
         f = self.fi(0x0005)
@@ -242,6 +511,43 @@ def cmd_status(m, a):
         print(linha)
 
 
+def texto_bateria(b):
+    soc = f"{b['soc']}% " if b["soc"] is not None else ""
+    txt = f"Bateria: {soc}({b['nivel']}), {b['estado_carga'].replace('_', ' ')}"
+    ext = {"nenhuma": "sem energia externa", "com_fio": "no cabo", "sem_fio": "em carga sem fio"}
+    return f"{txt}, {ext[b['energia_externa']]}" if b["energia_externa"] != "nenhuma" or not b["carregando"] else txt
+
+
+def cmd_bateria(m, a):
+    b = m.bateria()
+    if b is None:
+        sys.exit("Mouse sem a feature de bateria (0x1004).")
+    print(texto_bateria(b), flush=True)
+    if not a.seguir:
+        return
+    m.ao_bateria(lambda i: print(texto_bateria(i), flush=True))
+    m.ao_conexao(lambda ok: print("Conexão: " + ("estabelecida" if ok else "perdida"), flush=True))
+    m.ao_estado(lambda e: print(f"Receptor: {e}", flush=True))
+    m.iniciar_leitor()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        m.fechar()
+
+
+def _gravando(f):
+    """Roda o comando inteiro (leitura, gravação e verificação) sob o flock de gravação."""
+    def envolto(m, a):
+        with m.transacao(gravando=True):
+            return f(m, a)
+    envolto.__name__ = f.__name__
+    return envolto
+
+
+@_gravando
 def cmd_rate(m, a):
     if a.hz not in RATES or a.hz not in m.taxas_suportadas():
         sys.exit(f"Taxa {a.hz} Hz não suportada. Suportadas: {m.taxas_suportadas()}")
@@ -296,6 +602,7 @@ def cmd_rate(m, a):
     print("Taxa atual:", hz(m.taxa_atual()))
 
 
+@_gravando
 def cmd_dpi(m, a):
     if not dpi_valido(a.n):
         sug = ", ".join(map(str, dpis_proximos(a.n)))
@@ -419,21 +726,22 @@ def cmd_restaurar(m, a):
     if not a.sim and input("Continuar? (s/N) ").strip().lower() != "s":
         print("Cancelado.")
         return
-    original = m.perfil_ativo()
-    try:
-        for sec in difer:
-            try:
-                m.gravar_verificado(sec, bk[sec])
-            except (TimeoutError, IOError) as e:
-                print(f"Setor {sec}: falha ao gravar ({e}).")
-                regravar_original(m, sec, antes[sec])
-                sys.exit(1)
-            if sec <= 5:
-                m.definir_perfil(sec)
-            print(f"Setor {sec}: restaurado e verificado.")
-    finally:
-        m.definir_perfil(original)
-        time.sleep(0.5)
+    with m.transacao(gravando=True):
+        original = m.perfil_ativo()
+        try:
+            for sec in difer:
+                try:
+                    m.gravar_verificado(sec, bk[sec])
+                except (TimeoutError, IOError) as e:
+                    print(f"Setor {sec}: falha ao gravar ({e}).")
+                    regravar_original(m, sec, antes[sec])
+                    sys.exit(1)
+                if sec <= 5:
+                    m.definir_perfil(sec)
+                print(f"Setor {sec}: restaurado e verificado.")
+        finally:
+            m.definir_perfil(original)
+            time.sleep(0.5)
     print("Taxa atual:", hz(m.taxa_atual()))
     avisar_pulados(pulados)
 
@@ -461,6 +769,9 @@ def main():
     p = argparse.ArgumentParser(description="Polling rate do PRO X 2 Superlight (perfis onboard)")
     sp = p.add_subparsers(dest="cmd", required=True)
     sp.add_parser("status").set_defaults(f=cmd_status)
+    bt = sp.add_parser("bateria")
+    bt.add_argument("--seguir", action="store_true", help="continua imprimindo eventos até Ctrl+C")
+    bt.set_defaults(f=cmd_bateria)
     r = sp.add_parser("rate")
     r.add_argument("hz", type=int)
     r.add_argument("--perfil", type=int, nargs="+", help="setores (1..5); padrão: perfis ativos")
@@ -481,7 +792,14 @@ def main():
     w.add_argument("--sem-navegador", action="store_true", help="não abrir o navegador")
     w.set_defaults(f=cmd_painel)
     a = p.parse_args()
-    a.f(Mouse(), a)
+    try:
+        m = Mouse()
+    except ErroMouse as e:
+        sys.exit(str(e))
+    try:
+        a.f(m, a)
+    except (ErroMouse, TimeoutError) as e:
+        sys.exit(f"Erro: {e}")
 
 
 if __name__ == "__main__":

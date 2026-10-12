@@ -36,6 +36,34 @@ def estragar_crc(mouse, sec):
     mouse.setores[sec] = bytes(d)
 
 
+class TestTransacao(Base):
+    def test_operacoes_de_escrita_usam_transacao_gravando(self):
+        for op in (lambda: self.painel.gravar(1, polling_hz=500), lambda: self.painel.restaurar(2)):
+            self.mouse.transacoes.clear()
+            op()
+            self.assertIn(True, self.mouse.transacoes)
+
+    def test_apagar_macro_usa_transacao(self):
+        self.mouse.transacoes.clear()
+        self.painel.apagar_macro(8)
+        self.assertIn(True, self.mouse.transacoes)
+
+    def test_erro_mouse_dispara_rollback(self):
+        from prox2 import MouseInalcancavel
+        original = self.mouse.setores[1]
+        grav = self.mouse.gravar_verificado
+
+        def falha(sec, data):
+            if sec == 1 and self.mouse.setores[1] == original:
+                self.mouse.setores[1] = bytes(data)  # gravou, mas depois o mouse some
+                raise MouseInalcancavel("sumiu")
+            grav(sec, data)
+        self.mouse.gravar_verificado = falha
+        with self.assertRaises(ErroPainel):
+            self.painel.gravar(1, polling_hz=500)
+        self.assertEqual(self.mouse.setores[1], original)
+
+
 class TestCorrecoesFinais(Base):
     def test_restaurar_sem_backup_com_vaga_crc_ruim(self):
         estragar_crc(self.mouse, 2)

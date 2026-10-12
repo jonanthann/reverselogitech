@@ -10,7 +10,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import acoes
-from painel_core import ErroPainel
+from painel_core import ErroPainel, validar_campos
+from prox2 import MouseInalcancavel, TravaOcupada
 
 PAGINA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "painel", "index.html")
 CAMPOS = ("niveis", "dpi_padrao", "dpi_shift", "lod", "polling_hz", "botoes", "gshift", "ativa", "nome")
@@ -18,24 +19,6 @@ ROTA_MACRO = re.compile(r"^/api/macros(?:/(\d+)(?:/(apagar))?)?$")
 ROTA_VAGA = re.compile(r"^/api/vagas/(\d+)(?:/(usar|restaurar))?$")
 LIMITE_CORPO = 65536
 SEM_SINAL_S = 120
-
-
-def validar_campos(campos):
-    """Devolve uma mensagem de erro em português, ou None se os tipos estão certos."""
-    for k, v in campos.items():
-        if k == "ativa":
-            ok = isinstance(v, bool)
-        elif k == "niveis":
-            ok = isinstance(v, list) and all(isinstance(n, int) and not isinstance(n, bool) for n in v)
-        elif k in ("botoes", "gshift"):
-            ok = isinstance(v, list) and all(isinstance(a, dict) for a in v)
-        elif k == "nome":
-            ok = isinstance(v, str)
-        else:
-            ok = isinstance(v, int) and not isinstance(v, bool)
-        if not ok:
-            return f"Valor inválido para {k}."
-    return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -167,6 +150,10 @@ class Handler(BaseHTTPRequestHandler):
             r = f(*args, **kw)
         except ErroPainel as e:
             return self._json(400, {"erro": str(e)})
+        except TravaOcupada as e:
+            return self._json(409, {"erro": str(e)})
+        except MouseInalcancavel as e:
+            return self._json(503, {"erro": str(e)})
         except (OSError, TimeoutError, SystemExit):
             return self._json(503, {"erro": "mouse não encontrado"})
         except TypeError:

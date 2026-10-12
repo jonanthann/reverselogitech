@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import tempfile
@@ -7,6 +8,7 @@ import urllib.error
 import urllib.request
 
 import perfil
+import prox2
 from painel_core import Painel
 from painel_web import criar_servidor
 from tests.mouse_falso import MouseFalso
@@ -178,6 +180,35 @@ class TestWebMouseDormindo(Base):
         c, d = self.req("GET", "/api/vagas")
         self.assertEqual(c, 503)
         self.assertEqual(d["erro"], "mouse não encontrado")
+
+
+class MouseInalcancavelFalso(MouseFalso):
+    def ler_setor(self, sec, crc=True):
+        raise prox2.MouseInalcancavel("Mouse desligado ou fora de alcance.")
+
+
+class MouseTravado(MouseFalso):
+    @contextlib.contextmanager
+    def transacao(self, gravando=False):
+        raise prox2.TravaOcupada("Outro programa está gravando no mouse.")
+        yield
+
+
+class TestWebErroMouse(Base):
+    classe_mouse = MouseInalcancavelFalso
+
+    def test_inalcancavel_503(self):
+        c, d = self.req("GET", "/api/vagas")
+        self.assertEqual(c, 503)
+        self.assertIn("fora de alcance", d["erro"])
+
+
+class TestWebTravaOcupada(Base):
+    classe_mouse = MouseTravado
+
+    def test_trava_ocupada_409(self):
+        c, d = self.req("POST", "/api/vagas/1", {"polling_hz": 500})
+        self.assertEqual(c, 409)
 
 
 if __name__ == "__main__":

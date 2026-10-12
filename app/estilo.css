@@ -1,0 +1,82 @@
+/* Tema só escuro: prata e preto, vermelho de erro e amarelo de aviso */
+@define-color fundo #000000;
+@define-color campo #0d0e10;
+@define-color texto #ffffff;
+@define-color suave #a9aeb5;
+@define-color prata rgba(214, 218, 224, 0.72);
+@define-color prata_fraca rgba(205, 210, 217, 0.22);
+@define-color destaque #e4e6ea;
+@define-color erro #ff4464;
+@define-color aviso #ffb401;
+
+window.myprox, window.myprox .fundo { background-color: @fundo; color: @texto; }
+window.myprox headerbar { background-image: none; background-color: #0c0d0e; box-shadow: none; border-bottom: 1px solid @prata_fraca; }
+window.myprox .suave { color: @suave; }
+window.myprox .titulo-vaga { font-weight: 700; font-size: 1.25rem; }
+
+.vidro {
+  background-image: linear-gradient(135deg, #2a2d31 0%, #111214 52%, #000000 100%);
+  border: 1px solid @prata;
+  border-radius: 18px;
+  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.45), inset 0 0 0 4px rgba(205, 210, 217, 0.2);
+  padding: 18px;
+}
+
+button.cartao {
+  background-image: linear-gradient(135deg, #2a2d31 0%, #111214 52%, #000000 100%);
+  background-color: transparent;
+  border: 1px solid @prata_fraca;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.4);
+  padding: 10px 12px;
+  color: @texto;
+}
+button.cartao:hover { border-color: @prata; }
+button.cartao label { color: @suave; }
+button.cartao label.nome { color: @texto; font-weight: 700; }
+button.cartao.sel {
+  background-image: linear-gradient(135deg, #3a3e44 0%, #16181b 55%, #000000 100%);
+  border-color: @destaque;
+  box-shadow: inset 0 0 0 1px @destaque, 0 0 12px rgba(228, 230, 234, 0.18);
+}
+button.cartao.sel label { color: @texto; font-weight: 700; }
+button.cartao.off { background-image: linear-gradient(135deg, #1b1d20, #050505); border-style: dashed; }
+button.cartao.off label { opacity: 0.7; }
+button.cartao label.etq { color: #ffffff; border-top: 3px solid @prata; padding-top: 3px; }
+
+button.acao {
+  background-image: linear-gradient(135deg, #2a2d31, #08090a);
+  background-color: transparent;
+  border: 1px solid @prata;
+  border-radius: 0;
+  box-shadow: none;
+  color: @texto;
+  font-weight: 600;
+  min-height: 34px;
+  padding: 4px 18px;
+}
+button.acao:hover { background-image: linear-gradient(135deg, #3a3e44, #121315); border-color: #ffffff; }
+button.acao.prim { background-image: linear-gradient(180deg, #f2f3f5, #bfc3c9); border-color: #ffffff; color: #0b0c0e; }
+button.acao.prim:hover { background-image: linear-gradient(180deg, #ffffff, #d6d9de); }
+button.acao.perigo { background-image: none; background-color: transparent; color: @erro; border-color: @erro; }
+button.acao.perigo:hover { background-color: #3a1820; }
+button.acao:disabled { opacity: 0.45; }
+
+.vidro entry, .vidro spinbutton, .vidro dropdown > button {
+  background-image: none;
+  background-color: @campo;
+  color: @texto;
+  border: 1px solid @prata_fraca;
+  border-radius: 4px;
+  box-shadow: none;
+}
+.vidro spinbutton > text { background: transparent; }
+.vidro entry:focus-within, .vidro spinbutton:focus-within { border-color: @destaque; }
+
+.faixa-aviso { background-color: rgba(255, 180, 1, 0.14); border: 1px solid @aviso; color: @aviso; padding: 8px 12px; }
+.aviso-vaga { color: @aviso; font-size: 0.9rem; }
+
+progressbar.osd trough { background-color: #2a2d31; min-height: 4px; }
+progressbar.osd progress { background-image: linear-gradient(90deg, #8a8f96, #ffffff, #8a8f96); min-height: 4px; }
+
+.vazio { color: @suave; padding: 24px; }

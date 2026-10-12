@@ -1,4 +1,5 @@
 """Mouse em memória para testes do Painel (nunca abre /dev/hidraw)."""
+import contextlib
 import struct
 
 from prox2 import RATES, crc_ok
@@ -10,6 +11,12 @@ class MouseFalso:
         self.em_uso = em_uso
         self.falhar_gravacao_em = None
         self.log = []
+        self.transacoes = []
+
+    @contextlib.contextmanager
+    def transacao(self, gravando=False):
+        self.transacoes.append(gravando)
+        yield self
 
     def ler_setor(self, sec, crc=True):
         d = self.setores[sec]

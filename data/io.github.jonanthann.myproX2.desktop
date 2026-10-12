@@ -1,0 +1,11 @@
+# Exec=myprox2 vale para o pacote .deb (/usr/bin/myprox2). Para rodar do repositório: python3 myprox2.py instalar-local
+[Desktop Entry]
+Type=Application
+Name=myproX2
+Comment=Bateria e configurações do mouse PRO X 2
+Exec=myprox2 %U
+Icon=io.github.jonanthann.myproX2
+Terminal=false
+Categories=Settings;HardwareSettings;
+StartupNotify=true
+X-GNOME-UsesNotifications=true

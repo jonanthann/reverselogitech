@@ -19,6 +19,24 @@ class ErroPainel(Exception):
     pass
 
 
+def validar_campos(campos):
+    """Devolve uma mensagem de erro em português, ou None se os tipos estão certos."""
+    for k, v in campos.items():
+        if k == "ativa":
+            ok = isinstance(v, bool)
+        elif k == "niveis":
+            ok = isinstance(v, list) and all(isinstance(n, int) and not isinstance(n, bool) for n in v)
+        elif k in ("botoes", "gshift"):
+            ok = isinstance(v, list) and all(isinstance(a, dict) for a in v)
+        elif k == "nome":
+            ok = isinstance(v, str)
+        else:
+            ok = isinstance(v, int) and not isinstance(v, bool)
+        if not ok:
+            return f"Valor inválido para {k}."
+    return None
+
+
 class Painel:
     def __init__(self, mouse, pasta_dados, backup=BACKUP_PADRAO):
         self.m = mouse
@@ -213,7 +231,7 @@ class Painel:
 
     def gravar(self, sec, *, niveis=None, dpi_padrao=None, dpi_shift=None, polling_hz=None, lod=None,
                botoes=None, gshift=None, ativa=None, nome=None):
-        with self.lock:
+        with self.lock, self.m.transacao(gravando=True):
             dire = self._checar(sec)
             try:
                 atual = self.m.ler_setor(sec)
@@ -295,7 +313,7 @@ class Painel:
                          f"botão {u['botao']}" for u in usos)
 
     def gravar_macro(self, sec, passos):
-        with self.lock:
+        with self.lock, self.m.transacao(gravando=True):
             try:
                 novo = acoes.montar_macro(passos)
             except ValueError as e:
@@ -332,7 +350,7 @@ class Painel:
             return sec
 
     def apagar_macro(self, sec):
-        with self.lock:
+        with self.lock, self.m.transacao(gravando=True):
             if sec not in SECS_MACRO:
                 raise ErroPainel(f"Setor de macro inválido: use de {SECS_MACRO[0]} a {SECS_MACRO[-1]}.")
             usos = [r for r in self._referencias(self.m.diretorio()) if r["sec"] == sec]
@@ -355,7 +373,7 @@ class Painel:
             return self._vaga_atual(sec)
 
     def restaurar(self, sec):
-        with self.lock:
+        with self.lock, self.m.transacao(gravando=True):
             dire = self._checar(sec)
             atual = self.m.ler_setor(sec, crc=False)
             novo = com_crc(self.m.ler_setor(perfil.ROM_FABRICA, crc=False))
