@@ -423,6 +423,19 @@ def cmd_restaurar(m, a):
     print("Taxa atual:", hz(m.taxa_atual()))
 
 
+def cmd_painel(m, a):
+    import webbrowser
+    from painel_core import Painel
+    from painel_web import criar_servidor, servir
+    pasta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "painel_dados")
+    srv, url = criar_servidor(Painel(m, pasta), a.porta)
+    print("Painel em:", url, flush=True)
+    print("Ctrl+C para encerrar (fecha sozinho 120 s depois de fechar a página).")
+    if not a.sem_navegador:
+        webbrowser.open(url)
+    servir(srv)
+
+
 def main():
     p = argparse.ArgumentParser(description="Polling rate do PRO X 2 Superlight (perfis onboard)")
     sp = p.add_subparsers(dest="cmd", required=True)
@@ -442,6 +455,10 @@ def main():
     s.add_argument("arquivo")
     s.add_argument("--sim", action="store_true", help="não pedir confirmação")
     s.set_defaults(f=cmd_restaurar)
+    w = sp.add_parser("painel", help="abre o painel web local")
+    w.add_argument("--porta", type=int, default=0, help="porta local (0 = livre)")
+    w.add_argument("--sem-navegador", action="store_true", help="não abrir o navegador")
+    w.set_defaults(f=cmd_painel)
     a = p.parse_args()
     a.f(Mouse(), a)
 

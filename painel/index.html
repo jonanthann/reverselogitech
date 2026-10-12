@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Painel PRO X 2 Superlight</title>
+<style>
+:root {
+  --fundo:#eef0f3; --cartao:#fff; --campo:#f7f8fa; --texto:#1b1d21; --suave:#555c69; --borda:#c4c9d2;
+  --destaque:#1559b8; --sobre-destaque:#fff; --ok:#17692f; --erro:#a8231b; --erro-fundo:#fdecea; --ok-fundo:#e7f4ea;
+  --foco:#1559b8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fundo:#121417; --cartao:#1c1f25; --campo:#14161a; --texto:#e8eaee; --suave:#a2a9b6; --borda:#3a404b;
+    --destaque:#6aaeff; --sobre-destaque:#0b1a2e; --ok:#6fd98d; --erro:#ff9a90; --erro-fundo:#3a1d1b; --ok-fundo:#16301f;
+    --foco:#8cc0ff;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display:none !important; }
+body { margin:0 auto; padding:20px 16px 32px; max-width:1040px; background:var(--fundo); color:var(--texto); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+h1 { font-size:1.25rem; font-weight:650; margin:0 0 14px; letter-spacing:.01em; }
+:focus-visible { outline:3px solid var(--foco); outline-offset:2px; }
+
+#cartoes { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; }
+.cartao { display:flex; flex-direction:column; gap:2px; min-width:0; background:var(--cartao); border:1px solid var(--borda); border-radius:8px; padding:10px 12px; text-align:left; color:inherit; font:inherit; cursor:pointer; transition:border-color .15s, background-color .15s; }
+.cartao:hover { border-color:var(--suave); }
+.cartao b { display:block; overflow-wrap:anywhere; font-weight:650; line-height:1.25; margin-bottom:4px; }
+.cartao span { display:block; color:var(--suave); font-size:.88rem; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.cartao span:last-child { margin-top:6px; font-weight:600; }
+.cartao.sel { border-color:var(--destaque); box-shadow:0 0 0 2px var(--destaque); }
+.cartao.off { background:transparent; border-style:dashed; }
+.cartao.off b, .cartao.off span { opacity:.6; }
+.cartao:has(.etq) { border-top:4px solid var(--ok); padding-top:7px; }
+.etq { color:var(--ok) !important; }
+
+#editor { background:var(--cartao); border:1px solid var(--borda); border-radius:8px; padding:16px; margin-top:14px; }
+#titulo { font-size:1.1rem; font-weight:650; margin:0; overflow-wrap:anywhere; }
+.aviso { color:var(--erro); font-size:.9rem; margin-top:4px; }
+.aviso:empty { display:none; }
+#editor label { display:block; margin:12px 0 4px; font-size:.92rem; font-weight:600; }
+#editor label:has(input[type=checkbox]) { display:flex; align-items:center; gap:8px; font-weight:500; font-size:1rem; margin-top:14px; cursor:pointer; }
+input[type=checkbox] { width:1.15rem; height:1.15rem; accent-color:var(--destaque); margin:0; }
+input[type=number], input[type=text], select { width:100%; max-width:320px; min-height:40px; padding:6px 10px; font:inherit; color:inherit; background:var(--campo); border:1px solid var(--borda); border-radius:6px; }
+input[type=number], select { font-variant-numeric:tabular-nums; }
+input:focus-visible, select:focus-visible { outline-offset:0; border-color:var(--foco); }
+
+.linha { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:18px; }
+button.acao { min-height:40px; padding:8px 16px; font:inherit; font-weight:600; color:inherit; background:var(--campo); border:1px solid var(--borda); border-radius:6px; cursor:pointer; }
+button.acao:hover:not(:disabled) { border-color:var(--suave); }
+button.acao.prim { background:var(--destaque); color:var(--sobre-destaque); border-color:var(--destaque); }
+button.acao.prim:hover:not(:disabled) { filter:brightness(1.08); }
+#restaurar { margin-left:auto; color:var(--erro); border-color:var(--erro); background:transparent; }
+#restaurar:hover:not(:disabled) { background:var(--erro-fundo); border-color:var(--erro); }
+#confirma { padding:12px; border:1px solid var(--erro); background:var(--erro-fundo); border-radius:6px; }
+#confirma span { flex:1 1 220px; font-weight:600; }
+#sim { background:var(--erro); border-color:var(--erro); color:#fff; }
+#sim:hover:not(:disabled) { filter:brightness(1.1); background:var(--erro); }
+button:disabled { opacity:.45; cursor:not-allowed; }
+button:disabled.prim, button.prim:disabled { filter:grayscale(.6); }
+
+#status { margin-top:14px; min-height:2.6em; padding:8px 12px; border-radius:6px; border:1px solid transparent; }
+#aviso-dir { margin-bottom:10px; padding:8px 12px; border-radius:6px; border:1px solid var(--erro); color:var(--erro); background:var(--erro-fundo); }
+#status:empty { visibility:hidden; }
+#status.ok { color:var(--ok); background:var(--ok-fundo); border-color:var(--ok); }
+#status.erro { color:var(--erro); background:var(--erro-fundo); border-color:var(--erro); }
+
+@media (max-width: 860px) { #cartoes { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) {
+  body { padding:14px 12px 28px; }
+  #cartoes { grid-template-columns:minmax(0, 1fr); }
+  input[type=number], input[type=text], select { max-width:none; }
+  .linha button.acao { flex:1 1 100%; }
+  #restaurar { margin-left:0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+</style>
+</head>
+<body>
+<h1>Painel PRO X 2 Superlight</h1>
+<div id="aviso-dir" class="erro" hidden></div>
+<div id="cartoes"></div>
+<div id="editor" hidden>
+  <h2 id="titulo"></h2>
+  <div id="aviso" class="aviso"></div>
+  <label for="dpi">DPI</label><input id="dpi" type="number" min="100" step="10">
+  <label for="polling">Polling (Hz)</label><select id="polling"></select>
+  <label for="lod">LOD (distância de elevação)</label>
+  <select id="lod"><option value="1">baixo</option><option value="2">médio</option><option value="3">alto</option></select>
+  <label for="nome">Nome (até 24 caracteres)</label><input id="nome" type="text" maxlength="24">
+  <label><input id="ativa" type="checkbox"> Vaga ativa</label>
+  <div class="linha">
+    <button class="acao prim" id="gravar">Gravar no mouse</button>
+    <button class="acao" id="usar">Usar agora</button>
+    <button class="acao" id="umdpi" hidden>Usar um DPI só</button>
+    <button class="acao" id="restaurar">Restaurar</button>
+  </div>
+  <div id="confirma" class="linha" hidden>
+    <span>Restaurar esta vaga para o padrão de fábrica?</span>
+    <button class="acao prim" id="sim">Sim, restaurar</button>
+    <button class="acao" id="nao">Cancelar</button>
+  </div>
+</div>
+<div id="status" role="status"></div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let dados = null, sel = null, ocupado = false, inicial = {};
+
+function status(msg, tipo) { const s = $("status"); s.textContent = msg; s.className = tipo || ""; }
+
+async function api(metodo, url, corpo) {
+  const r = await fetch(url, { method: metodo, headers: { "Content-Type": "application/json" },
+    body: corpo === undefined ? undefined : JSON.stringify(corpo) });
+  const txt = await r.text();
+  const j = txt ? JSON.parse(txt) : null;
+  if (!r.ok) throw new Error((j && j.erro) || "Erro " + r.status);
+  return j;
+}
+
+function travar(v) {
+  ocupado = v;
+  document.querySelectorAll("button.acao").forEach(b => b.disabled = v);
+}
+
+function desenhar() {
+  const box = $("cartoes");
+  box.textContent = "";
+  for (const v of dados.vagas) {
+    const b = document.createElement("button");
+    b.className = "cartao" + (v.sec === sel ? " sel" : "") + (v.ativa ? "" : " off");
+    const n = document.createElement("b"); n.textContent = v.nome;
+    const d = document.createElement("span"); d.textContent = v.dpis.join(", ") + " DPI";
+    const p = document.createElement("span"); p.textContent = v.polling_hz + " Hz";
+    const e = document.createElement("span");
+    e.textContent = (v.em_uso ? "Em uso" : v.ativa ? "Ativa" : "Desligada") + (v.crc_ok ? "" : " (CRC inválido)");
+    if (v.em_uso) e.className = "etq";
+    b.append(n, d, p, e);
+    b.onclick = () => { sel = v.sec; $("confirma").hidden = true; desenhar(); preencher(); };
+    box.append(b);
+  }
+}
+
+function preencher() {
+  const v = dados.vagas.find(x => x.sec === sel);
+  $("editor").hidden = !v;
+  if (!v) return;
+  $("titulo").textContent = "Editando: " + v.nome;
+  $("aviso").textContent = v.aviso || "";
+  $("dpi").value = v.dpis[0] || "";
+  const pol = $("polling"); pol.textContent = "";
+  for (const hz of dados.taxas) { const o = document.createElement("option"); o.value = hz; o.textContent = hz; pol.append(o); }
+  pol.value = v.polling_hz;
+  $("lod").value = v.lod;
+  $("ativa").checked = v.ativa;
+  $("nome").value = v.nome_real || "";
+  $("umdpi").hidden = !!v.um_nivel;
+  inicial = { dpi: $("dpi").value, polling: $("polling").value, lod: $("lod").value,
+    ativa: $("ativa").checked, nome: $("nome").value };
+}
+
+async function carregar() {
+  dados = await api("GET", "/api/vagas");
+  if (sel === null || !dados.vagas.some(v => v.sec === sel)) {
+    const u = dados.vagas.find(v => v.em_uso) || dados.vagas[0];
+    sel = u ? u.sec : null;
+  }
+  const ad = $("aviso-dir"); ad.textContent = dados.aviso_diretorio || ""; ad.hidden = !dados.aviso_diretorio;
+  desenhar(); preencher(); travar(ocupado);
+}
+
+async function fazer(f, msg) {
+  if (ocupado) return;
+  travar(true); status("Aguarde...");
+  try { await f(); await carregar(); status(msg, "ok"); }
+  catch (e) { status(e.message, "erro"); }
+  finally { travar(false); }
+}
+
+// manda só o que o usuário mudou em relação ao que o formulário mostrou ao preencher
+function corpo(extra) {
+  const c = {}, i = inicial;
+  const num = (id, nome) => {
+    const n = parseInt($(id).value, 10);
+    if (isNaN(n)) throw new Error("Preencha um valor válido em " + nome + ".");
+    return n;
+  };
+  if ((extra && extra.um_dpi_so) || $("dpi").value !== i.dpi) c.dpi = num("dpi", "DPI");
+  if ($("polling").value !== i.polling) c.polling_hz = num("polling", "Polling");
+  if ($("lod").value !== i.lod) c.lod = num("lod", "LOD");
+  if ($("ativa").checked !== i.ativa) c.ativa = $("ativa").checked;
+  if ($("nome").value !== i.nome) c.nome = $("nome").value;
+  return Object.assign(c, extra || {});
+}
+
+$("gravar").onclick = () => fazer(() => api("POST", "/api/vagas/" + sel, corpo()), "Gravado e verificado");
+$("umdpi").onclick = () => fazer(() => api("POST", "/api/vagas/" + sel, corpo({ um_dpi_so: true })), "Gravado e verificado");
+$("usar").onclick = () => fazer(() => api("POST", "/api/vagas/" + sel + "/usar"), "Vaga em uso agora");
+$("restaurar").onclick = () => { $("confirma").hidden = false; };
+$("nao").onclick = () => { $("confirma").hidden = true; };
+$("sim").onclick = () => { $("confirma").hidden = true; fazer(() => api("POST", "/api/vagas/" + sel + "/restaurar"), "Vaga restaurada"); };
+
+const sinal = () => fetch("/api/sinal", { method: "POST" }).catch(() => {});
+sinal(); setInterval(sinal, 30000);
+carregar().catch(e => status(e.message, "erro"));
+</script>
+</body>
+</html>

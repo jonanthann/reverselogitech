@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 *.tmp
+.superpowers/
+painel_dados/
+docs/superpowers/
