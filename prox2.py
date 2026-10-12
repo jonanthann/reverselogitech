@@ -5,6 +5,7 @@ PRO X 2 Superlight, via HID++ 2.0 em hidraw. Só stdlib, sem sudo.
 Uso:
   prox2.py status
   prox2.py rate <hz> [--perfil N ...]   (N = número do setor, 1..5)
+  prox2.py dpi <n> [--perfil N ...]
   prox2.py backup <arquivo.json>
   prox2.py restaurar <arquivo.json> [--sim]
 """
@@ -12,6 +13,9 @@ import argparse, json, os, select, struct, sys, time
 
 SWID = 0x0A
 RATES = [125, 250, 500, 1000, 2000, 4000, 8000]
+# faixas de DPI do sensor 0 (feature 0x2202): (início, fim, passo)
+DPI_FAIXAS = [(100, 200, 1), (200, 500, 2), (500, 1000, 5), (1000, 2000, 10), (2000, 5000, 20),
+              (5000, 10000, 50), (10000, 20000, 100), (20000, 32000, 125), (32000, 44000, 200)]
 BACKUP_PADRAO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prox2_backup_perfis.json")
 
 
@@ -198,6 +202,21 @@ def dpis(setor):
     return res
 
 
+def dpi_valido(n):
+    return any(lo <= n <= hi and (n - lo) % st == 0 for lo, hi, st in DPI_FAIXAS)
+
+
+def dpis_proximos(n):
+    cand = set()
+    for lo, hi, st in DPI_FAIXAS:
+        c = min(max(n, lo), hi)
+        baixo = lo + (c - lo) // st * st
+        cand.update((baixo, min(baixo + st, hi)))
+    abaixo = [c for c in cand if c < n]
+    acima = [c for c in cand if c > n]
+    return ([max(abaixo)] if abaixo else []) + ([min(acima)] if acima else [])
+
+
 def cmd_status(m, a):
     print("Nome:", m.nome())
     print("Firmware:", m.firmware())
@@ -206,6 +225,13 @@ def cmd_status(m, a):
     print(f"Perfil ativo (setor): {m.perfil_ativo():#06x}")
     print("Taxa atual:", hz(m.taxa_atual()))
     print("Taxas suportadas:", ", ".join(str(t) for t in m.taxas_suportadas()), "Hz")
+    f = m.fi(0x2202)
+    if f is not None:
+        try:
+            r = m.req(f, 5, b"\0")
+            print("DPI atual (sensor):", struct.unpack(">H", r[1:3])[0])
+        except (TimeoutError, IOError) as e:
+            print(f"DPI atual (sensor): não lido ({e})")
     for sec, ativo in m.diretorio():
         s = m.ler_setor(sec)
         linha = f"Perfil setor {sec}: ativo={'sim' if ativo else 'não'}"
@@ -268,6 +294,64 @@ def cmd_rate(m, a):
         m.definir_perfil(original)
         time.sleep(0.5)
     print("Taxa atual:", hz(m.taxa_atual()))
+
+
+def cmd_dpi(m, a):
+    if not dpi_valido(a.n):
+        sug = ", ".join(map(str, dpis_proximos(a.n)))
+        sys.exit(f"DPI {a.n} inválido. Valores válidos mais próximos: {sug}")
+    dire = m.diretorio()
+    if a.perfil:
+        alvo = []
+        for p in a.perfil:
+            if p not in [s for s, _ in dire]:
+                sys.exit(f"Setor {p} não está no diretório.")
+            alvo.append(p)
+    else:
+        alvo = [s for s, ativo in dire if ativo]
+    if not alvo:
+        sys.exit("Nenhum perfil alvo.")
+
+    atuais = {s: m.ler_setor(s) for s in alvo}
+    for s, d in atuais.items():
+        if not crc_ok(d):
+            sys.exit(f"CRC ruim no setor {s}, recusando gravar.")
+        n = sum(1 for k in range(5) if any(d[4 + 5 * k:8 + 5 * k]))
+        if n != 1 or not any(d[4:8]):
+            sys.exit(f"Setor {s} tem {n} níveis de DPI preenchidos (DPIs={', '.join(dpis(d)) or '-'}). "
+                     "Só perfis com exatamente 1 nível são aceitos, pois o índice do nível ativo "
+                     "ainda não foi confirmado. Nada foi gravado.")
+
+    if not os.path.exists(BACKUP_PADRAO):
+        try:
+            salvar_backup(m, BACKUP_PADRAO, exclusivo=True)
+        except FileExistsError:
+            print("Backup já existe, mantido:", BACKUP_PADRAO)
+        except Exception as e:
+            sys.exit(f"Backup falhou ({e}), nada foi gravado no mouse.")
+    else:
+        print("Backup já existe, mantido:", BACKUP_PADRAO)
+
+    original = m.perfil_ativo()
+    try:
+        for s, d in atuais.items():
+            esperado = bytearray(d)
+            esperado[4:8] = struct.pack("<HH", a.n, a.n)  # byte 8 (LOD) preservado
+            esperado = com_crc(esperado)
+            if esperado == d:
+                print(f"Setor {s}: já em {a.n} DPI, pulando.")
+                continue
+            try:
+                m.gravar_verificado(s, esperado)
+            except (TimeoutError, IOError) as e:
+                print(f"Setor {s}: falha ao gravar ({e}).")
+                regravar_original(m, s, d)
+                sys.exit(1)
+            m.definir_perfil(s)  # recarrega o perfil gravado
+            print(f"Setor {s}: gravado {a.n} DPI e verificado.")
+    finally:
+        m.definir_perfil(original)
+        time.sleep(0.5)
 
 
 def regravar_original(m, sec, original):
@@ -347,6 +431,10 @@ def main():
     r.add_argument("hz", type=int)
     r.add_argument("--perfil", type=int, nargs="+", help="setores (1..5); padrão: perfis ativos")
     r.set_defaults(f=cmd_rate)
+    d = sp.add_parser("dpi")
+    d.add_argument("n", type=int)
+    d.add_argument("--perfil", type=int, nargs="+", help="setores (1..5); padrão: perfis ativos")
+    d.set_defaults(f=cmd_dpi)
     b = sp.add_parser("backup")
     b.add_argument("arquivo")
     b.set_defaults(f=cmd_backup)

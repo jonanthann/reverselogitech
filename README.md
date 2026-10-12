@@ -30,12 +30,15 @@ Os perfis 1 e 2 ficaram em 2000 Hz e 1600 DPI, gravados na memória interna. A c
 python3 prox2.py status
 python3 prox2.py rate 2000
 python3 prox2.py rate 2000 --perfil 1
+python3 prox2.py dpi 1600
+python3 prox2.py dpi 1600 --perfil 1
 python3 prox2.py backup arquivo.json
 python3 prox2.py restaurar arquivo.json [--sim]
 ```
 
 - `status` mostra o estado atual dos perfis.
 - `rate N` grava a taxa em Hz. Por padrão vale para todos os perfis ativos. Com `--perfil N`, só para aquele perfil.
+- `dpi N` grava o DPI (X e Y iguais). Por padrão vale para todos os perfis ativos. Com `--perfil N`, só para aquele perfil. Só aceita perfis com um único nível de DPI, porque o índice do nível ativo ainda não foi confirmado. Valores fora das faixas do sensor são recusados, com sugestão dos mais próximos.
 - `backup` salva os perfis num arquivo JSON.
 - `restaurar` grava de volta os perfis de um arquivo JSON. A opção `--sim` é opcional.
 
