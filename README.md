@@ -1,6 +1,8 @@
-# Logitech PRO X 2 Superlight no Linux: polling rate com memória interna
+# Engenharia reversa do HID++ do Logitech PRO X 2 Superlight: polling rate e DPI na memória interna, no Linux
 
-Ferramentas para trocar o polling rate do Logitech PRO X 2 Superlight (sem fio, receptor Lightspeed USB `046d:c54d`) no Debian Linux, mantendo os perfis da memória interna (onboard profiles) ativos. Tudo fala HID++ 2.0 direto com o hidraw do receptor, sem sudo.
+Engenharia reversa do protocolo HID++ do Logitech PRO X 2 Superlight (sem fio, receptor Lightspeed USB `046d:c54d`), para facilitar o uso da memória interna (onboard profiles) no Linux, especificamente no Debian. As ferramentas trocam o polling rate e o DPI sem desativar os perfis da memória interna. Tudo fala HID++ 2.0 direto com o hidraw do receptor.
+
+O `/dev/hidraw` do receptor costuma vir só para root. Libere o acesso (ex.: `sudo chmod a+rw /dev/hidraw6`, o número varia) ou rode os comandos com sudo.
 
 ## O problema
 
@@ -18,9 +20,9 @@ Os perfis 1 e 2 ficaram em 2000 Hz e 1600 DPI, gravados na memória interna. A c
 
 | Arquivo | Para que serve |
 |---|---|
-| `prox2.py` | Ferramenta principal: status, trocar taxa, backup e restauração. Sem sudo. |
+| `prox2.py` | Ferramenta principal: status, trocar taxa e DPI, backup e restauração. Com o hidraw liberado, roda sem sudo. |
 | `prox2_backup_perfis.json` | Backup dos setores 0..5 de antes de qualquer alteração (original de fábrica/G Hub). |
-| `testar_polling_raw.py` | Conta pacotes crus do receptor por 10 s. Sem sudo. É a melhor forma de medir. |
+| `testar_polling_raw.py` | Conta pacotes crus do receptor por 10 s. Com o hidraw liberado, roda sem sudo. É a melhor forma de medir. |
 | `testar_polling.py` | Mede pelo evdev. Precisa de sudo. |
 | `testar_host_mode.py` | Diagnóstico: testa a taxa em modo host. |
 
@@ -54,7 +56,7 @@ A melhor medição é a de pacotes crus, que não depende de nenhum software no 
 python3 testar_polling_raw.py
 ```
 
-Ela conta os pacotes do receptor por 10 segundos e não precisa de sudo.
+Ela conta os pacotes do receptor por 10 segundos e, com o hidraw liberado, não precisa de sudo.
 
 Para medir pelo evdev (precisa de sudo):
 
@@ -126,3 +128,9 @@ O `prox2_backup_perfis.json` guarda os setores 0..5 de antes de qualquer altera�
 ```
 python3 prox2.py restaurar prox2_backup_perfis.json [--sim]
 ```
+
+## Aviso legal
+
+Projeto independente, sem afiliação, apoio ou endosso da Logitech. Logitech, PRO X 2 Superlight, Lightspeed e G HUB são marcas da Logitech. Todos os direitos sobre elas, sobre o hardware e sobre o firmware pertencem à Logitech.
+
+Use por sua conta e risco. As ferramentas gravam na memória do mouse. Se precisar voltar atrás, use o backup e a restauração do `prox2.py`.
