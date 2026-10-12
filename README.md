@@ -1,32 +1,36 @@
-# Engenharia reversa do HID++ do Logitech PRO X 2 Superlight: polling rate e DPI na memória interna, no Linux
+Versão traduzida para português: [README.pt-BR.md](README.pt-BR.md)
 
-Engenharia reversa do protocolo HID++ do Logitech PRO X 2 Superlight (sem fio, receptor Lightspeed USB `046d:c54d`), para facilitar o uso da memória interna (onboard profiles) no Linux, especificamente no Debian. As ferramentas trocam o polling rate e o DPI sem desativar os perfis da memória interna. Tudo fala HID++ 2.0 direto com o hidraw do receptor.
+# Reverse engineering the Logitech PRO X 2 Superlight HID++ protocol: onboard polling rate and DPI on Linux
 
-O `/dev/hidraw` do receptor costuma vir só para root. Libere o acesso (ex.: `sudo chmod a+rw /dev/hidraw6`, o número varia) ou rode os comandos com sudo.
+This project reverse engineers the HID++ protocol of the Logitech PRO X 2 Superlight (wireless, Lightspeed USB receiver `046d:c54d`) so you can use its onboard memory (onboard profiles) on Linux, specifically Debian. The tools change the polling rate and DPI without turning off the onboard profiles. Everything talks HID++ 2.0 directly to the receiver's hidraw device.
 
-## O problema
+The receiver's `/dev/hidraw` node is usually root-only. Open it up (e.g. `sudo chmod a+rw /dev/hidraw6`, the number varies) or run the commands with sudo.
 
-Com a memória interna ativa, não era possível trocar o polling rate no Linux.
+Note: the program's interface (command names, options and output messages) is in Portuguese.
 
-O Solaar não funciona com esse mouse. Ele lê o perfil num layout antigo (DPI em 2 bytes a partir do byte 3, polling só no byte 0), e o PRO X 2 usa o formato de perfil 7.
+## The problem
 
-O OpenLogi também atrapalhava. Ele pegava o mouse com exclusividade (grab) e reenviava os eventos por um mouse virtual. Por isso foi desinstalado (`sudo apt purge openlogi`). Ferramentas desse tipo impedem medir a taxa real no event do mouse.
+With onboard memory active, there was no way to change the polling rate on Linux.
 
-## Resultado
+Solaar does not work with this mouse. It reads the profile with an older layout (DPI in 2 bytes starting at byte 3, polling only in byte 0), and the PRO X 2 uses profile format 7.
 
-Os perfis 1 e 2 ficaram em 2000 Hz e 1600 DPI, gravados na memória interna. A configuração vale sem nenhum programa rodando e em outro PC.
+OpenLogi got in the way too. It grabbed the mouse exclusively and re-sent the events through a virtual mouse, so it was uninstalled (`sudo apt purge openlogi`). Tools like that make it impossible to measure the real rate on the mouse's event device.
 
-## Arquivos
+## Result
 
-| Arquivo | Para que serve |
+Profiles 1 and 2 are set to 2000 Hz and 1600 DPI, stored in the onboard memory. The setting holds with no program running and on another PC.
+
+## Files
+
+| File | What it does |
 |---|---|
-| `prox2.py` | Ferramenta principal: status, trocar taxa e DPI, backup e restauração. Com o hidraw liberado, roda sem sudo. |
-| `prox2_backup_perfis.json` | Backup dos setores 0..5 de antes de qualquer alteração (original de fábrica/G Hub). |
-| `testar_polling_raw.py` | Conta pacotes crus do receptor por 10 s. Com o hidraw liberado, roda sem sudo. É a melhor forma de medir. |
-| `testar_polling.py` | Mede pelo evdev. Precisa de sudo. |
-| `testar_host_mode.py` | Diagnóstico: testa a taxa em modo host. |
+| `prox2.py` | Main tool: status, change rate and DPI, backup and restore. With hidraw access opened, it runs without sudo. |
+| `prox2_backup_perfis.json` | Backup of sectors 0..5 from before any change (factory/G Hub original). |
+| `testar_polling_raw.py` | Counts raw packets from the receiver for 10 s. With hidraw access opened, it runs without sudo. This is the best way to measure. |
+| `testar_polling.py` | Measures through evdev. Needs sudo. |
+| `testar_host_mode.py` | Diagnostic: tests the rate in host mode. |
 
-## Uso rápido
+## Quick usage
 
 ```
 python3 prox2.py status
@@ -38,67 +42,67 @@ python3 prox2.py backup arquivo.json
 python3 prox2.py restaurar arquivo.json [--sim]
 ```
 
-- `status` mostra o estado atual dos perfis.
-- `rate N` grava a taxa em Hz. Por padrão vale para todos os perfis ativos. Com `--perfil N`, só para aquele perfil.
-- `dpi N` grava o DPI (X e Y iguais). Por padrão vale para todos os perfis ativos. Com `--perfil N`, só para aquele perfil. Só aceita perfis com um único nível de DPI, porque o índice do nível ativo ainda não foi confirmado. Valores fora das faixas do sensor são recusados, com sugestão dos mais próximos.
-- `backup` salva os perfis num arquivo JSON.
-- `restaurar` grava de volta os perfis de um arquivo JSON. A opção `--sim` é opcional.
+- `status` shows the current state of the profiles.
+- `rate N` writes the rate in Hz. By default it applies to all active profiles. With `--perfil N`, only to that profile.
+- `dpi N` writes the DPI (X and Y equal). By default it applies to all active profiles. With `--perfil N`, only to that profile. It only accepts profiles with a single DPI level, because the index of the active level has not been confirmed yet. Values outside the sensor's ranges are rejected, with a suggestion of the closest ones.
+- `backup` saves the profiles to a JSON file.
+- `restaurar` (restore) writes the profiles from a JSON file back to the mouse. The `--sim` (yes) option is optional.
 
-Na primeira gravação, o `prox2.py` cria o backup automático `prox2_backup_perfis.json`. Se o arquivo já existir, ele não é sobrescrito.
+On the first write, `prox2.py` creates the automatic backup `prox2_backup_perfis.json`. If the file already exists, it is not overwritten.
 
-Taxas acima de 2000 Hz consomem mais bateria. O firmware (MPM 32.05) suporta 4000 e 8000 Hz, mas essas taxas não foram testadas.
+Rates above 2000 Hz use more battery. The firmware (MPM 32.05) supports 4000 and 8000 Hz, but those rates have not been tested.
 
-## Como medir
+## How to measure
 
-A melhor medição é a de pacotes crus, que não depende de nenhum software no meio:
+The best measurement is the raw packet count, which does not depend on any software in between:
 
 ```
 python3 testar_polling_raw.py
 ```
 
-Ela conta os pacotes do receptor por 10 segundos e, com o hidraw liberado, não precisa de sudo.
+It counts the receiver's packets for 10 seconds and, with hidraw access opened, does not need sudo.
 
-Para medir pelo evdev (precisa de sudo):
+To measure through evdev (needs sudo):
 
 ```
 sudo python3 testar_polling.py [/dev/input/eventN]
 ```
 
-O padrão é `/dev/input/event7`. Passe outro caminho se o seu mouse estiver em outro event.
+The default is `/dev/input/event7`. Pass another path if your mouse is on a different event node.
 
-Para medir bem, mexa o mouse rápido e sem parar. Pausas puxam a média para baixo. Sites de teste no navegador podem subestimar a taxa.
+For a good measurement, move the mouse fast and without stopping. Pauses pull the average down. Browser-based test sites can underestimate the rate.
 
-Medições com o perfil em 2000 Hz: cerca de 1975 pacotes/s na contagem crua e 1979 Hz de máximo num teste online.
+Measurements with the profile at 2000 Hz: about 1975 packets/s in the raw count and a 1979 Hz maximum on an online test.
 
-### Diagnóstico em modo host
+### Host mode diagnostic
 
 ```
 python3 testar_host_mode.py [indice]
 ```
 
-O script desliga a memória interna por alguns segundos, pede a taxa direto ao mouse, mede e religa a memória interna.
+The script turns off the onboard memory for a few seconds, requests the rate directly from the mouse, measures it, and turns the onboard memory back on.
 
-## O que foi descoberto
+## What was found
 
-Feature HID++ 0x8100 (onboard profiles) e 0x8061 (extended report rate).
+HID++ features 0x8100 (onboard profiles) and 0x8061 (extended report rate).
 
-### Layout do perfil
+### Profile layout
 
-Cada perfil ocupa os setores 1..5, com 255 bytes. Os 2 últimos bytes são o CRC-CCITT (init `0xFFFF`, poly `0x1021`, big-endian).
+Each profile takes sectors 1..5, with 255 bytes. The last 2 bytes are the CRC-CCITT (init `0xFFFF`, poly `0x1021`, big-endian).
 
-| Byte | Conteúdo |
+| Byte | Content |
 |---|---|
-| 0 | Taxa realmente usada pelo mouse |
-| 1 | Taxa que o mouse informa (`getReportRate` da feature 0x8061) |
-| 2 e 3 | Ainda não confirmados |
-| 4 em diante | DPI: 5 entradas de 5 bytes |
-| 253 e 254 | CRC |
+| 0 | Rate the mouse actually uses |
+| 1 | Rate the mouse reports (`getReportRate` of feature 0x8061) |
+| 2 and 3 | Not confirmed yet |
+| 4 onward | DPI: 5 entries of 5 bytes |
+| 253 and 254 | CRC |
 
-Cada entrada de DPI tem X (2 bytes, little-endian), Y (2 bytes, little-endian) e 1 byte que provavelmente é o lift-off.
+Each DPI entry has X (2 bytes, little-endian), Y (2 bytes, little-endian) and 1 byte that is probably the lift-off distance.
 
-Os valores de taxa são índices:
+The rate values are indexes:
 
-| Índice | Taxa |
+| Index | Rate |
 |---|---|
 | 0 | 125 Hz |
 | 1 | 250 Hz |
@@ -108,29 +112,33 @@ Os valores de taxa são índices:
 | 5 | 4000 Hz |
 | 6 | 8000 Hz |
 
-### A armadilha dos bytes 0 e 1
+### The byte 0 and 1 trap
 
-Gravar só o byte 1 faz o mouse informar 2000 Hz, mas ele continua transmitindo a 1000 Hz. É preciso gravar os bytes 0 e 1 juntos.
+Writing only byte 1 makes the mouse report 2000 Hz, but it keeps transmitting at 1000 Hz. You have to write bytes 0 and 1 together.
 
-Foi assim que isso foi provado:
+This is how it was shown:
 
-1. No modo host, a taxa pedida direto deu cerca de 1870 pacotes/s, então o mouse era capaz de 2000 Hz.
-2. Com os bytes 0 e 1 gravados no perfil, a medição deu cerca de 1975 pacotes/s.
+1. In host mode, the directly requested rate gave about 1870 packets/s, so the mouse was capable of 2000 Hz.
+2. With bytes 0 and 1 written to the profile, the measurement gave about 1975 packets/s.
 
-## Por que o Solaar falha
+## Why Solaar fails
 
-O Solaar assume o layout antigo de perfil: DPI em 2 bytes a partir do byte 3 e polling só no byte 0. No formato 7 do PRO X 2, o DPI são 5 entradas de 5 bytes a partir do byte 4, e a taxa está nos bytes 0 e 1. O Solaar interpreta os bytes errados e não consegue trocar a taxa com a memória interna ativa.
+Solaar assumes the older profile layout: DPI in 2 bytes starting at byte 3 and polling only in byte 0. In the PRO X 2's format 7, DPI is 5 entries of 5 bytes starting at byte 4, and the rate is in bytes 0 and 1. Solaar reads the wrong bytes and cannot change the rate while onboard memory is active.
 
-## Restaurar o original
+## Restoring the original
 
-O `prox2_backup_perfis.json` guarda os setores 0..5 de antes de qualquer alteração, ou seja, o original de fábrica/G Hub. Para voltar a ele:
+`prox2_backup_perfis.json` holds sectors 0..5 from before any change, that is, the factory/G Hub original. To go back to it:
 
 ```
 python3 prox2.py restaurar prox2_backup_perfis.json [--sim]
 ```
 
-## Aviso legal
+## How it was made
 
-Projeto independente, sem afiliação, apoio ou endosso da Logitech. Logitech, PRO X 2 Superlight, Lightspeed e G HUB são marcas da Logitech. Todos os direitos sobre elas, sobre o hardware e sobre o firmware pertencem à Logitech.
+The reverse engineering was done with the help of [Claude Code](https://claude.com/claude-code). It read and compared the onboard memory sectors, queried the mouse's HID++ features, and wrote and reviewed the scripts. Every write was checked on the real mouse by reading the sector back and measuring the packet rate.
 
-Use por sua conta e risco. As ferramentas gravam na memória do mouse. Se precisar voltar atrás, use o backup e a restauração do `prox2.py`.
+## Legal notice
+
+This is an independent project, with no affiliation with, support from or endorsement by Logitech. Logitech, PRO X 2 Superlight, Lightspeed and G HUB are trademarks of Logitech. All rights to them, to the hardware and to the firmware belong to Logitech.
+
+Use at your own risk. The tools write to the mouse's memory. If you need to go back, use the backup and restore commands of `prox2.py`.
