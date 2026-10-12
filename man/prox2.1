@@ -1,0 +1,92 @@
+.TH PROX2 1 "2026-10-12" "prox2 0.1.0" "User Commands"
+.SH NAME
+prox2 \- inspect and configure a Logitech PRO X Superlight 2 mouse
+.SH SYNOPSIS
+.B prox2
+.I command
+.RI [ options ]
+.SH DESCRIPTION
+.B prox2
+talks to the mouse through the Lightspeed receiver (046d:c54d) using the hidraw interface.
+It shows the mouse state, battery and profiles, changes the report rate and the DPI,
+saves and restores the profile sectors, and opens a local web panel.
+.PP
+Access to the receiver needs the udev rule installed by the package.
+Plug the receiver again after installing it.
+.SH COMMANDS
+.TP
+.B status
+Show name, firmware, mode, active profile, current report rate and DPI,
+and the state of each profile sector.
+.TP
+.B bateria " [\-\-seguir]"
+Show the battery level. With
+.BR \-\-seguir ,
+keep printing battery, connection and receiver events until Ctrl+C.
+.TP
+.BR rate " " \fIhz\fR " [\-\-perfil " \fIN\fR " ...]"
+Set the report rate. Valid values for
+.I hz
+are 125, 250, 500, 1000, 2000, 4000 and 8000, limited to the rates the mouse supports.
+.TP
+.BR dpi " " \fIn\fR " [\-\-perfil " \fIN\fR " ...]"
+Set the DPI of the profiles. Valid values are 100 to 200 in steps of 1,
+200 to 500 in steps of 2, 500 to 1000 in steps of 5, 1000 to 2000 in steps of 10,
+2000 to 5000 in steps of 20, 5000 to 10000 in steps of 50,
+10000 to 20000 in steps of 100, 20000 to 32000 in steps of 125
+and 32000 to 44000 in steps of 200.
+An invalid value stops with an error that lists the nearest valid ones.
+.TP
+.BI backup " file"
+Save the profile sectors to
+.I file
+(JSON).
+.TP
+.BR restaurar " " \fIfile\fR " [\-\-sim]"
+Write the sectors saved in
+.I file
+back to the mouse. It asks for confirmation unless
+.B \-\-sim
+is given. Sectors with an invalid CRC in the file are skipped.
+.TP
+.B painel " [\-\-porta " \fIport\fR "] [\-\-sem\-navegador]"
+Open the local web panel. With
+.B \-\-porta
+use a fixed local port (default 0, any free port).
+With
+.B \-\-sem\-navegador
+do not open the browser. The panel closes by itself 120 seconds after the page is closed.
+.SH OPTIONS
+.TP
+.BR \-\-perfil " " \fIN\fR " ..."
+For
+.B rate
+and
+.BR dpi :
+profile sectors to change, from 1 to 5. The default is the active profiles.
+.SH FILES
+.TP
+.I ~/.local/share/myproX2/prox2_backup_perfis.json
+Default backup file. The rate and dpi commands create it when it does not exist, and never overwrite it.
+.TP
+.I ~/.local/share/myproX2/painel_dados/
+Data of the web panel.
+.TP
+.I /usr/lib/udev/rules.d/60\-prox2.rules
+Gives the logged in user access to the receiver hidraw device.
+.PP
+The data folder follows
+.BR XDG_DATA_HOME .
+.SH EXAMPLES
+.nf
+prox2 status
+prox2 bateria \-\-seguir
+prox2 rate 1000
+prox2 dpi 1600 \-\-perfil 1 2
+prox2 backup perfis.json
+prox2 painel \-\-sem\-navegador
+.fi
+.SH SEE ALSO
+.BR myprox2 (1)
+.SH AUTHOR
+jonanthann

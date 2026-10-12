@@ -1,0 +1,92 @@
+.TH PROX2 1 "2026-10-12" "prox2 0.1.0" "Comandos do usuário"
+.SH NOME
+prox2 \- inspeciona e configura o mouse Logitech PRO X Superlight 2
+.SH SINOPSE
+.B prox2
+.I comando
+.RI [ options ]
+.SH DESCRIÇÃO
+.B prox2
+fala com o mouse pelo receptor Lightspeed (046d:c54d) usando a interface hidraw.
+Mostra o estado, a bateria e os perfis do mouse, muda a taxa de polling e o DPI,
+salva e restaura os setores de perfil e abre um painel web local.
+.PP
+O acesso ao receptor precisa da regra udev instalada pelo pacote.
+Conecte o receptor de novo depois de instalar.
+.SH COMANDOS
+.TP
+.B status
+Mostra nome, firmware, modo, perfil ativo, taxa de polling e DPI atuais
+e o estado de cada setor de perfil.
+.TP
+.B bateria " [\-\-seguir]"
+Mostra o nível da bateria. Com
+.BR \-\-seguir ,
+continua imprimindo eventos de bateria, conexão e receptor até Ctrl+C.
+.TP
+.BR rate " " \fIhz\fR " [\-\-perfil " \fIN\fR " ...]"
+Define a taxa de polling. Os valores válidos de
+.I hz
+são 125, 250, 500, 1000, 2000, 4000 e 8000, limitados às taxas que o mouse suporta.
+.TP
+.BR dpi " " \fIn\fR " [\-\-perfil " \fIN\fR " ...]"
+Define o DPI dos perfis. Os valores válidos vão de 100 a 200 em passos de 1,
+200 a 500 em passos de 2, 500 a 1000 em passos de 5, 1000 a 2000 em passos de 10,
+2000 a 5000 em passos de 20, 5000 a 10000 em passos de 50,
+10000 a 20000 em passos de 100, 20000 a 32000 em passos de 125
+e 32000 a 44000 em passos de 200.
+Um valor inválido para com erro e lista os válidos mais próximos.
+.TP
+.BI backup " file"
+Salva os setores de perfil em
+.I file
+(JSON).
+.TP
+.BR restaurar " " \fIfile\fR " [\-\-sim]"
+Grava no mouse os setores salvos em
+.I file
+de volta. Pede confirmação, a menos que
+.B \-\-sim
+seja usado. Setores com CRC inválido no arquivo são pulados.
+.TP
+.B painel " [\-\-porta " \fIport\fR "] [\-\-sem\-navegador]"
+Abre o painel web local. Com
+.B \-\-porta
+usa uma porta local fixa (padrão 0, qualquer porta livre).
+Com
+.B \-\-sem\-navegador
+não abre o navegador. O painel se encerra sozinho 120 s depois que a página é fechada.
+.SH OPÇÕES
+.TP
+.BR \-\-perfil " " \fIN\fR " ..."
+Para
+.B rate
+e
+.BR dpi :
+setores de perfil a alterar, de 1 a 5. O padrão são os perfis ativos.
+.SH ARQUIVOS
+.TP
+.I ~/.local/share/myproX2/prox2_backup_perfis.json
+Arquivo de backup padrão. Os comandos rate e dpi o criam se ele não existir, e nunca o sobrescrevem.
+.TP
+.I ~/.local/share/myproX2/painel_dados/
+Dados do painel web.
+.TP
+.I /usr/lib/udev/rules.d/60\-prox2.rules
+Dá ao usuário logado acesso ao dispositivo hidraw do receptor.
+.PP
+A pasta de dados segue
+.BR XDG_DATA_HOME .
+.SH EXEMPLOS
+.nf
+prox2 status
+prox2 bateria \-\-seguir
+prox2 rate 1000
+prox2 dpi 1600 \-\-perfil 1 2
+prox2 backup perfis.json
+prox2 painel \-\-sem\-navegador
+.fi
+.SH VEJA TAMBÉM
+.BR myprox2 (1)
+.SH AUTOR
+jonanthann

@@ -1,0 +1,78 @@
+.TH MYPROX2 1 "2026-10-12" "prox2 0.1.0" "User Commands"
+.SH NAME
+myprox2 \- GNOME app for the Logitech PRO X Superlight 2 mouse
+.SH SYNOPSIS
+.B myprox2
+.RB [ \-\-background ]
+.RB [ \-\-falso ]
+.RB [ \-\-simular\-bateria
+.IR N ]
+.RB [ \-\-simular\-carga ]
+.br
+.B myprox2
+.RB { instalar\-local | desinstalar\-local }
+.SH DESCRIPTION
+.B myprox2
+is a native GNOME app (GTK 4 and libadwaita) built on the same code as
+.BR prox2 (1).
+It shows the mouse battery, with an icon in the top bar (tray) and notifications,
+and has a window with the profile slots and DPI, a "Botões" tab
+(5 buttons on 2 layers, normal and G\-Shift) and a "Macros" tab.
+The menu has "Iniciar com a sessão" to start the app with the session.
+For the tray icon on GNOME, install gnome\-shell\-extension\-appindicator.
+.SH OPTIONS
+Without options the window opens.
+.TP
+.B \-\-background
+Start without a window, only the tray icon.
+.TP
+.B \-\-falso
+Use a simulated mouse in memory. It does not touch the real mouse,
+so it is safe for trying the interface.
+The battery level is 80 unless \-\-simular\-bateria is given.
+.TP
+.BI \-\-simular\-bateria " N"
+Simulate battery level N.
+.TP
+.B \-\-simular\-carga
+Simulate a charging battery. Without \-\-simular\-bateria, the level is 50.
+.SH COMMANDS
+.TP
+.B instalar\-local
+Add the app to the menu for the current user (.desktop file and icon), pointing at the
+current copy of the code. It refuses to run when the app came from the package.
+.TP
+.B desinstalar\-local
+Remove the files written by
+.BR instalar\-local .
+.SH FILES
+.TP
+.I ~/.local/share/myproX2/
+Backup and data. Follows XDG_DATA_HOME.
+.TP
+.I ~/.config/autostart/io.github.jonanthann.myproX2.desktop
+Created by "Iniciar com a sessão"; starts the app with
+.BR \-\-background .
+Follows XDG_CONFIG_HOME.
+.TP
+.I ~/.local/share/applications/io.github.jonanthann.myproX2.desktop
+Menu entry written by
+.BR instalar\-local .
+.TP
+.I ~/.local/share/icons/hicolor/scalable/apps/io.github.jonanthann.myproX2.svg
+Icon written by
+.BR instalar\-local .
+.TP
+.I /usr/lib/udev/rules.d/60\-prox2.rules
+Gives the logged in user access to the receiver hidraw device.
+.SH EXAMPLES
+.nf
+myprox2
+myprox2 \-\-background
+myprox2 \-\-falso
+myprox2 \-\-simular\-bateria 15
+.fi
+.SH SEE ALSO
+.BR prox2 (1)
+.SH AUTHOR
+jonanthann
