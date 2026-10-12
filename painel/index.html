@@ -3,112 +3,235 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="dark">
 <title>Painel PRO X 2 Superlight</title>
 <style>
 :root {
-  --fundo:#eef0f3; --cartao:#fff; --campo:#f7f8fa; --texto:#1b1d21; --suave:#555c69; --borda:#c4c9d2;
-  --destaque:#1559b8; --sobre-destaque:#fff; --ok:#17692f; --erro:#a8231b; --erro-fundo:#fdecea; --ok-fundo:#e7f4ea;
-  --foco:#1559b8;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --fundo:#121417; --cartao:#1c1f25; --campo:#14161a; --texto:#e8eaee; --suave:#a2a9b6; --borda:#3a404b;
-    --destaque:#6aaeff; --sobre-destaque:#0b1a2e; --ok:#6fd98d; --erro:#ff9a90; --erro-fundo:#3a1d1b; --ok-fundo:#16301f;
-    --foco:#8cc0ff;
-  }
+  --fundo:#101113; --fundo2:#212225; --cartao:#252525; --campo:#393939; --campo-hover:#4d4d4d;
+  --texto:#fff; --suave:#999; --borda:#373e46;
+  --destaque:#00a9e0; --destaque-hover:#1ab1e3; --sobre-destaque:#0b1a22;
+  --erro:#ff4464; --erro-fundo:#3a1820; --aviso:#ffb401; --ok:#57ffd3; --ok-fundo:#10312a;
+  --trilho:#003343; --foco:#59d0ff;
 }
 * { box-sizing: border-box; }
 [hidden] { display:none !important; }
-body { margin:0 auto; padding:20px 16px 32px; max-width:1040px; background:var(--fundo); color:var(--texto); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-h1 { font-size:1.25rem; font-weight:650; margin:0 0 14px; letter-spacing:.01em; }
-:focus-visible { outline:3px solid var(--foco); outline-offset:2px; }
+html { background:var(--fundo); color-scheme:dark; }
+body { position:relative; margin:0 auto; padding:24px 16px 40px; max-width:1040px; color:var(--texto); font:400 16px/1.5 "Manrope", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; }
+h1 { font-size:1.5rem; font-weight:700; margin:0 0 16px; letter-spacing:-.01em; }
+:focus-visible { outline:2px solid var(--foco); outline-offset:2px; }
+
+/* fundo: gradiente lento, escuro nas bordas e com brilho no centro */
+body::before, body::after { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; }
+body::before { background:
+    radial-gradient(ellipse 60% 50% at 50% 45%, rgba(89,208,255,.28), rgba(87,255,211,.10) 55%, transparent 80%),
+    linear-gradient(115deg, #004679, #05714c, #6f35c0, #004679);
+  background-size:100% 100%, 300% 300%; background-position:0 0, 50% 50%; }
+body::after { background:radial-gradient(ellipse 95% 85% at 50% 45%, rgba(16,17,19,.15), rgba(16,17,19,.82) 70%, #101113 100%); }
+
+/* barra de progresso: aparece enquanto uma operacao esta em andamento */
+#progresso { position:fixed; top:0; left:0; right:0; height:4px; background:var(--trilho); overflow:hidden; z-index:20; opacity:0; transition:opacity .25s; pointer-events:none; }
+#progresso::after { content:""; position:absolute; top:0; bottom:0; left:-137px; width:137px;
+  background:linear-gradient(90deg, #00a9e0, #00aee0 20%, #00ebbf 40%, #00ebbf 60%, #00aee0 80%, #00a9e0); animation:brilho 1.4s linear infinite; }
+@keyframes brilho { to { transform:translateX(calc(100vw + 137px)); } }
+body.ocupado #progresso { opacity:1; }
 
 #cartoes { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; }
-.cartao { display:flex; flex-direction:column; gap:2px; min-width:0; background:var(--cartao); border:1px solid var(--borda); border-radius:8px; padding:10px 12px; text-align:left; color:inherit; font:inherit; cursor:pointer; transition:border-color .15s, background-color .15s; }
+.cartao { display:flex; flex-direction:column; gap:2px; min-width:0; background:var(--cartao); border:1px solid var(--borda); border-radius:2px; padding:10px 12px; text-align:left; color:inherit; font:inherit; cursor:pointer; transition:border-color .15s, background-color .15s; }
 .cartao:hover { border-color:var(--suave); }
-.cartao b { display:block; overflow-wrap:anywhere; font-weight:650; line-height:1.25; margin-bottom:4px; }
-.cartao span { display:block; color:var(--suave); font-size:.88rem; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.cartao b { display:block; overflow-wrap:anywhere; font-weight:700; line-height:1.25; margin-bottom:4px; }
+.cartao span { display:block; color:var(--suave); font-size:.9rem; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .cartao span:last-child { margin-top:6px; font-weight:600; }
-.cartao.sel { border-color:var(--destaque); box-shadow:0 0 0 2px var(--destaque); }
-.cartao.off { background:transparent; border-style:dashed; }
-.cartao.off b, .cartao.off span { opacity:.6; }
+.cartao.sel { border-color:var(--destaque); box-shadow:inset 0 0 0 1px var(--destaque); background:#1e2d35; }
+.cartao.off { background:rgba(37,37,37,.55); border-style:dashed; }
+.cartao.off b, .cartao.off span { opacity:.7; }
 .cartao:has(.etq) { border-top:4px solid var(--ok); padding-top:7px; }
 .etq { color:var(--ok) !important; }
 
-#editor { background:var(--cartao); border:1px solid var(--borda); border-radius:8px; padding:16px; margin-top:14px; }
-#titulo { font-size:1.1rem; font-weight:650; margin:0; overflow-wrap:anywhere; }
-.aviso { color:var(--erro); font-size:.9rem; margin-top:4px; }
+#editor { background:var(--cartao); border:1px solid var(--borda); border-radius:2px; padding:20px; margin-top:14px; }
+#titulo { font-size:1.25rem; font-weight:700; margin:0; overflow-wrap:anywhere; }
+.aviso { color:var(--aviso); font-size:.9rem; margin-top:4px; }
 .aviso:empty { display:none; }
-#editor label { display:block; margin:12px 0 4px; font-size:.92rem; font-weight:600; }
-#editor label:has(input[type=checkbox]) { display:flex; align-items:center; gap:8px; font-weight:500; font-size:1rem; margin-top:14px; cursor:pointer; }
+#editor label { display:block; margin:14px 0 4px; font-size:.9rem; font-weight:600; color:var(--suave); }
+#editor label:has(input[type=checkbox]) { display:flex; align-items:center; gap:8px; font-weight:500; font-size:1rem; color:var(--texto); margin-top:16px; cursor:pointer; }
 input[type=checkbox] { width:1.15rem; height:1.15rem; accent-color:var(--destaque); margin:0; }
-input[type=number], input[type=text], select { width:100%; max-width:320px; min-height:40px; padding:6px 10px; font:inherit; color:inherit; background:var(--campo); border:1px solid var(--borda); border-radius:6px; }
+input[type=number], input[type=text], select { width:100%; max-width:320px; min-height:42px; padding:6px 10px; font:inherit; color:var(--texto); background:var(--campo); border:1px solid transparent; border-radius:4px; transition:background-color .15s, border-color .15s; }
 input[type=number], select { font-variant-numeric:tabular-nums; }
-input:focus-visible, select:focus-visible { outline-offset:0; border-color:var(--foco); }
+input[type=number]:hover, input[type=text]:hover, select:hover { background:var(--campo-hover); }
+input:focus-visible, select:focus-visible { outline:2px solid var(--foco); outline-offset:0; border-color:var(--destaque); }
+select option { background:var(--campo); color:var(--texto); }
 
-.linha { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:18px; }
-button.acao { min-height:40px; padding:8px 16px; font:inherit; font-weight:600; color:inherit; background:var(--campo); border:1px solid var(--borda); border-radius:6px; cursor:pointer; }
-button.acao:hover:not(:disabled) { border-color:var(--suave); }
-button.acao.prim { background:var(--destaque); color:var(--sobre-destaque); border-color:var(--destaque); }
-button.acao.prim:hover:not(:disabled) { filter:brightness(1.08); }
+.linha { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:20px; }
+button.acao { min-height:42px; padding:8px 20px; font:inherit; font-weight:600; color:var(--texto); background:var(--campo); border:1px solid transparent; border-radius:0; box-shadow:none; cursor:pointer; transition:background-color .15s; }
+button.acao:hover:not(:disabled) { background:var(--campo-hover); }
+button.acao.prim { background:var(--destaque); color:var(--sobre-destaque); }
+button.acao.prim:hover:not(:disabled) { background:var(--destaque-hover); }
 #restaurar { margin-left:auto; color:var(--erro); border-color:var(--erro); background:transparent; }
-#restaurar:hover:not(:disabled) { background:var(--erro-fundo); border-color:var(--erro); }
-#confirma { padding:12px; border:1px solid var(--erro); background:var(--erro-fundo); border-radius:6px; }
-#confirma span { flex:1 1 220px; font-weight:600; }
-#sim { background:var(--erro); border-color:var(--erro); color:#fff; }
-#sim:hover:not(:disabled) { filter:brightness(1.1); background:var(--erro); }
+#restaurar:hover:not(:disabled) { background:var(--erro-fundo); }
 button:disabled { opacity:.45; cursor:not-allowed; }
-button:disabled.prim, button.prim:disabled { filter:grayscale(.6); }
 
-#status { margin-top:14px; min-height:2.6em; padding:8px 12px; border-radius:6px; border:1px solid transparent; }
-#aviso-dir { margin-bottom:10px; padding:8px 12px; border-radius:6px; border:1px solid var(--erro); color:var(--erro); background:var(--erro-fundo); }
+/* confirmacao como modal sobreposto */
+.confirma { position:fixed; inset:0; z-index:30; margin:0; display:flex; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.7); animation:aparece .1s ease-out; }
+.confirma .modal { width:100%; max-width:504px; background:var(--cartao); border-radius:2px; padding:28px 28px 24px; }
+.confirma h3 { margin:0 0 8px; font-size:1.5rem; font-weight:700; letter-spacing:-.01em; }
+.confirma p { margin:0; color:var(--suave); }
+.confirma .botoes { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; margin-top:24px; }
+#sim, #sim-m { background:var(--erro); color:#1a0508; }
+#sim:hover:not(:disabled), #sim-m:hover:not(:disabled) { background:#ff6580; }
+@keyframes aparece { from { opacity:0; } }
+
+#status { margin-top:14px; min-height:2.6em; padding:8px 12px; border-radius:2px; border:1px solid transparent; background:var(--cartao); }
+#aviso-dir { margin-bottom:10px; padding:8px 12px; border-radius:2px; border:1px solid var(--erro); color:var(--erro); background:var(--erro-fundo); }
 #status:empty { visibility:hidden; }
 #status.ok { color:var(--ok); background:var(--ok-fundo); border-color:var(--ok); }
 #status.erro { color:var(--erro); background:var(--erro-fundo); border-color:var(--erro); }
 
 @media (max-width: 860px) { #cartoes { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 420px) {
-  body { padding:14px 12px 28px; }
   #cartoes { grid-template-columns:minmax(0, 1fr); }
   input[type=number], input[type=text], select { max-width:none; }
-  .linha button.acao { flex:1 1 100%; }
+  .linha button.acao, .confirma .botoes button { flex:1 1 100%; }
   #restaurar { margin-left:0; }
+  .confirma .modal { padding:20px 18px; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation:none !important; transition:none !important; }
+}
+
+/* secoes novas: DPI, botoes e macros */
+h3.sec { font-size:1.1rem; font-weight:700; margin:24px 0 4px; }
+.nota { color:var(--suave); font-size:.9rem; margin:2px 0 8px; }
+#editor label.mini, #macros label.mini { display:inline-flex; align-items:center; gap:6px; margin:0; font-size:.9rem; font-weight:500; color:var(--texto); cursor:pointer; }
+input[type=radio] { width:1.1rem; height:1.1rem; accent-color:var(--destaque); margin:0; }
+.nivel, .botao, .passo { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:8px 0; border-top:1px solid var(--borda); }
+.nivel input[type=number] { max-width:140px; }
+.botao > b { flex:0 0 90px; }
+.botao .sub { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; flex:1 1 260px; min-width:0; }
+.botao select, .passo select { max-width:200px; }
+.botao .aviso { flex:1 1 100%; color:var(--aviso); margin:0; }
+.tecla { width:130px !important; cursor:pointer; text-align:center; }
+.tecla.cap { border-color:var(--destaque); background:var(--campo-hover); }
+button.acao.peq { min-height:36px; padding:4px 12px; }
+details > summary { cursor:pointer; font-weight:600; margin-top:16px; }
+#macros { background:var(--cartao); border:1px solid var(--borda); border-radius:2px; padding:20px; margin-top:14px; }
+#macros h2 { font-size:1.25rem; font-weight:700; margin:0; }
+.macro { border-top:1px solid var(--borda); padding:10px 0; display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+.macro .info { flex:1 1 260px; min-width:0; overflow-wrap:anywhere; }
+.macro .info span { display:block; color:var(--suave); font-size:.9rem; }
+.macro .botoes-m { display:flex; gap:8px; }
+#medit { margin-top:14px; border:1px solid var(--destaque); border-radius:2px; padding:14px; }
+#medit textarea, #medit input[type=text] { max-width:none; }
+#medit .modos { display:flex; gap:16px; margin-bottom:8px; }
+.erro-cli { color:var(--erro); }
+@media (max-width: 420px) { .botao > b { flex:1 1 100%; } .botao select, .passo select, .tecla { max-width:none; width:100% !important; } .macro .botoes-m { flex:1 1 100%; } .macro .botoes-m button { flex:1; } }
 </style>
 </head>
 <body>
+<div id="progresso" aria-hidden="true"></div>
 <h1>Painel PRO X 2 Superlight</h1>
 <div id="aviso-dir" class="erro" hidden></div>
 <div id="cartoes"></div>
 <div id="editor" hidden>
   <h2 id="titulo"></h2>
   <div id="aviso" class="aviso"></div>
-  <label for="dpi">DPI</label><input id="dpi" type="number" min="100" step="10">
+  <h3 class="sec">Níveis de DPI</h3>
+  <div class="nota">De 1 a 5 níveis, entre 100 e 44000.</div>
+  <div id="niveis"></div>
+  <div class="linha" style="margin-top:8px"><button class="acao" id="addnivel">Adicionar nível</button></div>
   <label for="polling">Polling (Hz)</label><select id="polling"></select>
   <label for="lod">LOD (distância de elevação)</label>
   <select id="lod"><option value="1">baixo</option><option value="2">médio</option><option value="3">alto</option></select>
   <label for="nome">Nome (até 24 caracteres)</label><input id="nome" type="text" maxlength="24">
   <label><input id="ativa" type="checkbox"> Vaga ativa</label>
+  <h3 class="sec">Botões</h3>
+  <div id="btn-normal"></div>
+  <details id="det-gshift">
+    <summary>Camada G-Shift</summary>
+    <div class="nota">Só vale com um botão configurado como G-Shift.</div>
+    <div id="btn-gshift"></div>
+  </details>
   <div class="linha">
     <button class="acao prim" id="gravar">Gravar no mouse</button>
     <button class="acao" id="usar">Usar agora</button>
-    <button class="acao" id="umdpi" hidden>Usar um DPI só</button>
     <button class="acao" id="restaurar">Restaurar</button>
   </div>
-  <div id="confirma" class="linha" hidden>
-    <span>Restaurar esta vaga para o padrão de fábrica?</span>
-    <button class="acao prim" id="sim">Sim, restaurar</button>
-    <button class="acao" id="nao">Cancelar</button>
+  <div id="confirma-d" class="confirma" role="dialog" aria-modal="true" aria-labelledby="confd-titulo" hidden>
+    <div class="modal">
+      <h3 id="confd-titulo">Alterações não gravadas</h3>
+      <p>Há alterações não gravadas nesta vaga. Descartar e continuar?</p>
+      <div class="botoes">
+        <button class="acao" id="nao-d">Cancelar</button>
+        <button class="acao prim" id="sim-d">Descartar</button>
+      </div>
+    </div>
+  </div>
+  <div id="confirma" class="confirma" role="dialog" aria-modal="true" aria-labelledby="conf-titulo" hidden>
+    <div class="modal">
+      <h3 id="conf-titulo">Restaurar vaga</h3>
+      <p>Restaurar esta vaga para o padrão de fábrica?</p>
+      <div class="botoes">
+        <button class="acao" id="nao">Cancelar</button>
+        <button class="acao prim" id="sim">Sim, restaurar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="macros">
+  <h2>Macros</h2>
+  <div class="nota">Setores de 6 a 15. Escolha uma macro num botão depois de salvá-la.</div>
+  <div id="lista-macros"></div>
+  <div class="linha"><button class="acao" id="nova-macro">Nova macro</button></div>
+  <div id="medit" hidden></div>
+  <div id="confirma-m" class="confirma" role="dialog" aria-modal="true" aria-labelledby="confm-titulo" hidden>
+    <div class="modal">
+      <h3 id="confm-titulo">Apagar macro</h3>
+      <p id="confm-texto">Apagar esta macro?</p>
+      <div class="botoes">
+        <button class="acao" id="nao-m">Cancelar</button>
+        <button class="acao prim" id="sim-m">Sim, apagar</button>
+      </div>
+    </div>
   </div>
 </div>
 <div id="status" role="status"></div>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-let dados = null, sel = null, ocupado = false, inicial = {};
+let dados = null, sel = null, ocupado = false, inicial = "", est = null, mEd = null, pendente = null;
 
+const BOTOES = ["Esquerdo", "Direito", "Meio", "Trás", "Frente"];
+const CLIQUES = [["esquerdo", "Esquerdo"], ["direito", "Direito"], ["meio", "Meio"], ["voltar", "Trás"], ["avancar", "Frente"]];
+const MIDIAS = [[0xCD, "Play/pausa"], [0xB5, "Próxima faixa"], [0xB6, "Faixa anterior"], [0xE9, "Volume +"], [0xEA, "Volume -"], [0xE2, "Mudo"]];
+const ESPECIAIS = [["proximo_dpi", "Próximo DPI"], ["dpi_anterior", "DPI anterior"], ["ciclo_dpi", "Ciclar DPI"], ["dpi_padrao", "DPI padrão"],
+  ["shift_dpi", "DPI shift"], ["proximo_perfil", "Próximo perfil"], ["perfil_anterior", "Perfil anterior"], ["ciclo_perfil", "Ciclar perfil"], ["gshift", "G-Shift"]];
+const TESTADOS = ["ciclo_dpi", "shift_dpi"];
+const TIPOS = [["clique", "Clique"], ["tecla", "Tecla"], ["midia", "Mídia"], ["especial", "Especial"], ["macro", "Macro"], ["desligado", "Desligado"]];
+
+// KeyboardEvent.code -> HID usage
+const HID = {}, NOME_HID = {};
+(() => {
+  for (let i = 0; i < 26; i++) HID["Key" + String.fromCharCode(65 + i)] = 4 + i;
+  for (let i = 1; i <= 9; i++) HID["Digit" + i] = 29 + i;
+  HID.Digit0 = 39;
+  for (let i = 1; i <= 12; i++) HID["F" + i] = 57 + i;
+  for (let i = 13; i <= 24; i++) HID["F" + i] = 91 + i;
+  Object.assign(HID, { Enter: 40, Escape: 41, Backspace: 42, Tab: 43, Space: 44, Minus: 45, Equal: 46, BracketLeft: 47,
+    BracketRight: 48, Backslash: 49, Semicolon: 51, Quote: 52, Backquote: 53, Comma: 54, Period: 55, Slash: 56,
+    Insert: 73, Home: 74, PageUp: 75, Delete: 76, End: 77, PageDown: 78, ArrowRight: 79, ArrowLeft: 80, ArrowDown: 81, ArrowUp: 82 });
+  for (const c in HID) NOME_HID[HID[c]] = c.replace(/^Key|^Digit/, "").replace("Arrow", "Seta ").replace("Escape", "Esc").replace("Page", "Page ");
+  NOME_HID[44] = "Espaço";
+})();
+const nomeTecla = u => NOME_HID[u] || ("HID " + u);
+const MODS = [[1, "Ctrl"], [2, "Shift"], [4, "Alt"], [8, "Super"]];
+const nomeMod = m => MODS.filter(x => m & x[0]).map(x => x[1]).join("+");
+const rotulo = (m, t) => (m ? nomeMod(m) + "+" : "") + nomeTecla(t);
+
+function el(tag, props, ...filhos) {
+  const e = document.createElement(tag);
+  Object.assign(e, props || {});
+  e.append(...filhos);
+  return e;
+}
+const opcao = (v, t) => el("option", { value: v, textContent: t });
 function status(msg, tipo) { const s = $("status"); s.textContent = msg; s.className = tipo || ""; }
 
 async function api(metodo, url, corpo) {
@@ -122,85 +245,406 @@ async function api(metodo, url, corpo) {
 
 function travar(v) {
   ocupado = v;
-  document.querySelectorAll("button.acao").forEach(b => b.disabled = v);
+  document.body.classList.toggle("ocupado", v);
+  document.querySelectorAll("button.acao").forEach(b => b.disabled = v || b.dataset.bloq === "1");
 }
 
+// caixa que captura a próxima tecla pressionada
+function caixaTecla(tecla, aoMudar) {
+  const i = el("input", { type: "text", readOnly: true, className: "tecla", value: tecla ? nomeTecla(tecla) : "", placeholder: "Clique e tecle" });
+  i.setAttribute("aria-label", "Tecla");
+  i.onfocus = () => { i.classList.add("cap"); i.value = "Pressione..."; };
+  i.onblur = () => { i.classList.remove("cap"); i.value = tecla ? nomeTecla(tecla) : ""; };
+  i.onkeydown = e => {
+    if (e.key === "Tab") return;
+    e.preventDefault(); e.stopPropagation();
+    const u = HID[e.code];
+    if (u === undefined) { i.value = "Tecla não suportada"; return; }
+    tecla = u; i.value = nomeTecla(u); aoMudar(u); i.blur();
+  };
+  return i;
+}
+function caixasMod(mod, aoMudar) {
+  const w = el("span", { className: "sub" });
+  for (const [bit, nome] of MODS) {
+    const c = el("input", { type: "checkbox", checked: !!(mod & bit) });
+    c.onchange = () => { mod = c.checked ? mod | bit : mod & ~bit; aoMudar(mod); };
+    w.append(el("label", { className: "mini" }, c, nome));
+  }
+  return w;
+}
+
+// ---------- vaga ----------
 function desenhar() {
   const box = $("cartoes");
   box.textContent = "";
   for (const v of dados.vagas) {
-    const b = document.createElement("button");
-    b.className = "cartao" + (v.sec === sel ? " sel" : "") + (v.ativa ? "" : " off");
-    const n = document.createElement("b"); n.textContent = v.nome;
-    const d = document.createElement("span"); d.textContent = v.dpis.join(", ") + " DPI";
-    const p = document.createElement("span"); p.textContent = v.polling_hz + " Hz";
-    const e = document.createElement("span");
-    e.textContent = (v.em_uso ? "Em uso" : v.ativa ? "Ativa" : "Desligada") + (v.crc_ok ? "" : " (CRC inválido)");
+    const b = el("button", { className: "cartao" + (v.sec === sel ? " sel" : "") + (v.ativa ? "" : " off") });
+    const e = el("span", { textContent: (v.em_uso ? "Em uso" : v.ativa ? "Ativa" : "Desligada") + (v.crc_ok ? "" : " (CRC inválido)") });
     if (v.em_uso) e.className = "etq";
-    b.append(n, d, p, e);
-    b.onclick = () => { sel = v.sec; $("confirma").hidden = true; desenhar(); preencher(); };
+    b.append(el("b", { textContent: v.nome }), el("span", { textContent: v.dpis.join(", ") + " DPI" }),
+      el("span", { textContent: v.polling_hz + " Hz" }), e);
+    b.onclick = () => {
+      if (v.sec === sel) return;
+      const ir = () => { sel = v.sec; $("confirma").hidden = true; desenhar(); preencher(); };
+      if (alterado()) pedirDescarte(ir, b); else ir();
+    };
     box.append(b);
   }
 }
 
-function preencher() {
+const limpa = a => {
+  const o = { tipo: a.tipo };
+  if (a.tipo === "clique") o.botao = a.botao;
+  else if (a.tipo === "tecla") { o.mod = a.mod; o.tecla = a.tecla; }
+  else if (a.tipo === "midia" || a.tipo === "especial") o.codigo = a.codigo;
+  else if (a.tipo === "macro") { o.sec = a.sec; o.offset = a.offset || 0; }
+  else if (a.tipo === "bruto") o.hex = a.hex;
+  return o;
+};
+const estadoSerial = () => JSON.stringify([est.niveis, est.padrao, est.shift, est.botoes.map(c => c.map(limpa))]);
+
+function alterado() {
+  if (!est || !inicial) return false;
+  return estadoSerial() !== inicial.est || $("polling").value !== inicial.polling || $("lod").value !== inicial.lod
+    || $("ativa").checked !== inicial.ativa || $("nome").value !== inicial.nome;
+}
+
+function pedirDescarte(ok, volta) {
+  $("sim-d").onclick = () => { fecharModal(); ok(); };
+  abrirModal($("confirma-d"), $("nao-d"), volta);
+}
+
+function preencher(manter) {
   const v = dados.vagas.find(x => x.sec === sel);
   $("editor").hidden = !v;
   if (!v) return;
   $("titulo").textContent = "Editando: " + v.nome;
   $("aviso").textContent = v.aviso || "";
-  $("dpi").value = v.dpis[0] || "";
-  const pol = $("polling"); pol.textContent = "";
-  for (const hz of dados.taxas) { const o = document.createElement("option"); o.value = hz; o.textContent = hz; pol.append(o); }
-  pol.value = v.polling_hz;
-  $("lod").value = v.lod;
-  $("ativa").checked = v.ativa;
-  $("nome").value = v.nome_real || "";
-  $("umdpi").hidden = !!v.um_nivel;
-  inicial = { dpi: $("dpi").value, polling: $("polling").value, lod: $("lod").value,
-    ativa: $("ativa").checked, nome: $("nome").value };
+  const pol = $("polling");
+  const antesPol = pol.value, antesLod = $("lod").value;
+  pol.textContent = "";
+  for (const hz of dados.taxas) pol.append(opcao(hz, hz));
+  const rascunho = manter && est && est.sec === sel;
+  if (!rascunho) {
+    est = { sec: sel, niveis: v.niveis.slice(), padrao: v.dpi_padrao, shift: v.dpi_shift,
+      botoes: [v.botoes.map(a => Object.assign({}, a)), v.gshift.map(a => Object.assign({}, a))] };
+    pol.value = v.polling_hz;
+    $("lod").value = v.lod;
+    $("ativa").checked = v.ativa;
+    $("nome").value = v.nome_real || "";
+    inicial = { polling: $("polling").value, lod: $("lod").value, ativa: $("ativa").checked, nome: $("nome").value, est: estadoSerial() };
+  } else {
+    // mantém o rascunho, mas recalcula a base com os dados recarregados
+    pol.value = antesPol; $("lod").value = antesLod;
+  }
+  desenharNiveis(); desenharBotoes();
 }
 
-async function carregar() {
+function desenharNiveis() {
+  const box = $("niveis"); box.textContent = "";
+  est.niveis.forEach((n, i) => {
+    const num = el("input", { type: "number", min: 100, max: 44000, step: 10, value: n });
+    num.setAttribute("aria-label", "DPI do nível " + (i + 1));
+    num.oninput = () => { est.niveis[i] = parseInt(num.value, 10); };
+    const rp = el("input", { type: "radio", name: "dpi-padrao", checked: est.padrao === i });
+    rp.onchange = () => { est.padrao = i; };
+    const rs = el("input", { type: "radio", name: "dpi-shift", checked: est.shift === i });
+    rs.onchange = () => { est.shift = i; };
+    const rem = el("button", { className: "acao peq", textContent: "Remover", disabled: est.niveis.length <= 1 || ocupado });
+    rem.onclick = () => {
+      est.niveis.splice(i, 1);
+      if (est.padrao === i) est.padrao = 0; else if (est.padrao > i) est.padrao--;
+      if (est.shift === i) est.shift = 0; else if (est.shift > i) est.shift--;
+      desenharNiveis();
+    };
+    box.append(el("div", { className: "nivel" }, num, el("label", { className: "mini" }, rp, "Padrão"), el("label", { className: "mini" }, rs, "Shift"), rem));
+  });
+  $("addnivel").dataset.bloq = est.niveis.length >= 5 ? "1" : "0";
+  $("addnivel").disabled = ocupado || est.niveis.length >= 5;
+}
+$("addnivel").onclick = () => {
+  if (est.niveis.length >= 5) return;
+  est.niveis.push(est.niveis[est.niveis.length - 1] || 800); desenharNiveis();
+};
+
+// ---------- botoes ----------
+function padraoTipo(t) {
+  switch (t) {
+    case "clique": return { tipo: t, botao: "esquerdo" };
+    case "tecla": return { tipo: t, mod: 0, tecla: 4 };
+    case "midia": return { tipo: t, codigo: MIDIAS[0][0] };
+    case "especial": return { tipo: t, codigo: "ciclo_dpi", testado: true };
+    case "macro": { const m = dados.macros.find(x => x.estado === "ok"); return m ? { tipo: t, sec: m.sec, offset: 0 } : { tipo: t, sec: 6, offset: 0, aviso: "Nenhuma macro pronta, crie uma." }; }
+    default: return { tipo: "desligado" };
+  }
+}
+
+function desenharBotoes() {
+  ["btn-normal", "btn-gshift"].forEach((id, cam) => {
+    const box = $(id); box.textContent = "";
+    est.botoes[cam].forEach((a, i) => box.append(linhaBotao(cam, i, a)));
+  });
+}
+
+function linhaBotao(cam, i, a) {
+  const sub = el("div", { className: "sub" });
+  const tipo = el("select");
+  const tipos = a.tipo === "bruto" ? TIPOS.concat([["bruto", "Bruto"]]) : TIPOS;
+  for (const [v, t] of tipos) tipo.append(opcao(v, t));
+  tipo.value = a.tipo;
+  tipo.setAttribute("aria-label", "Tipo de " + BOTOES[i]);
+  tipo.onchange = () => {
+    const antes = est.botoes[cam][i];
+    est.botoes[cam][i] = padraoTipo(tipo.value);
+    if (tipo.value === "macro" && !dados.macros.some(m => m.estado === "ok")) abrirMacro(null, { cam, i, antes }); desenharBotoes();
+  };
+  if (a.tipo === "clique") {
+    const s = el("select"); for (const [v, t] of CLIQUES) s.append(opcao(v, t));
+    s.value = a.botao; s.onchange = () => { a.botao = s.value; };
+    sub.append(s);
+  } else if (a.tipo === "tecla") {
+    sub.append(caixaTecla(a.tecla, u => { a.tecla = u; }), caixasMod(a.mod, m => { a.mod = m; }));
+  } else if (a.tipo === "midia") {
+    const s = el("select"); for (const [v, t] of MIDIAS) s.append(opcao(v, t));
+    if (!MIDIAS.some(m => m[0] === a.codigo)) s.append(opcao(a.codigo, "Código " + a.codigo));
+    s.value = a.codigo; s.onchange = () => { a.codigo = parseInt(s.value, 10); };
+    sub.append(s);
+  } else if (a.tipo === "especial") {
+    const s = el("select");
+    for (const [v, t] of ESPECIAIS) s.append(opcao(v, t + (TESTADOS.includes(v) ? "" : " (não testado)")));
+    s.value = a.codigo; s.onchange = () => { a.codigo = s.value; a.testado = TESTADOS.includes(s.value); desenharBotoes(); };
+    sub.append(s);
+  } else if (a.tipo === "macro") {
+    const s = el("select");
+    for (const m of dados.macros) if (m.estado === "ok" || m.sec === a.sec) s.append(opcao(m.sec, "Macro " + m.sec + (m.estado === "ok" ? "" : " (" + m.estado + ")")));
+    if (!dados.macros.some(m => m.sec === a.sec)) s.append(opcao(a.sec, "Macro " + a.sec));
+    s.append(opcao("nova", "Nova macro..."));
+    s.value = a.sec;
+    s.onchange = () => {
+      if (s.value === "nova") { s.value = a.sec; abrirMacro(null, { cam, i }); return; }
+      a.sec = parseInt(s.value, 10); a.offset = 0; delete a.aviso; delete a.macro_estado; desenharBotoes();
+    };
+    sub.append(s);
+  } else if (a.tipo === "bruto") {
+    sub.append(el("input", { type: "text", readOnly: true, value: a.hex }));
+  }
+  const linha = el("div", { className: "botao" }, el("b", { textContent: BOTOES[i] }), tipo, sub);
+  if (a.aviso) linha.append(el("div", { className: "aviso", textContent: a.aviso }));
+  return linha;
+}
+
+// ---------- gravar ----------
+function corpo() {
+  const c = {}, i = inicial;
+  for (const [id, nome] of [["polling", "Polling"], ["lod", "LOD"]]) {
+    if ($(id).value !== i[id]) {
+      const n = parseInt($(id).value, 10);
+      if (isNaN(n)) throw new Error("Preencha um valor válido em " + nome + ".");
+      c[id === "polling" ? "polling_hz" : "lod"] = n;
+    }
+  }
+  if ($("ativa").checked !== i.ativa) c.ativa = $("ativa").checked;
+  if ($("nome").value !== i.nome) c.nome = $("nome").value;
+  if (estadoSerial() !== i.est) {
+    const [n0, p0, s0, b0] = JSON.parse(i.est);
+    if (est.niveis.length < 1 || est.niveis.length > 5) throw new Error("Use de 1 a 5 níveis de DPI.");
+    if (est.niveis.some(n => !Number.isInteger(n) || n < 100 || n > 44000)) throw new Error("Cada nível de DPI deve ficar entre 100 e 44000.");
+    const bs = est.botoes.map(cm => cm.map(limpa));
+    for (let cam = 0; cam < bs.length; cam++) bs[cam].forEach((a, k) => {
+      if (a.tipo !== "macro") return;
+      const m = dados.macros.find(x => x.sec === a.sec);
+      if ((!m || m.estado !== "ok") && JSON.stringify(a) !== JSON.stringify(b0[cam][k]))
+        throw new Error("O botão " + BOTOES[k] + " usa uma macro que não está pronta.");
+    });
+    if (!bs[0].some(a => a.tipo === "clique" && a.botao === "esquerdo")) throw new Error("A camada normal precisa de um botão com clique esquerdo.");
+    if (JSON.stringify(est.niveis) !== JSON.stringify(n0) || est.padrao !== p0 || est.shift !== s0) {
+      c.niveis = est.niveis; c.dpi_padrao = est.padrao; c.dpi_shift = est.shift;
+    }
+    if (JSON.stringify(bs[0]) !== JSON.stringify(b0[0])) c.botoes = bs[0];
+    if (JSON.stringify(bs[1]) !== JSON.stringify(b0[1])) c.gshift = bs[1];
+  }
+  return c;
+}
+
+async function carregar(manter) {
   dados = await api("GET", "/api/vagas");
   if (sel === null || !dados.vagas.some(v => v.sec === sel)) {
     const u = dados.vagas.find(v => v.em_uso) || dados.vagas[0];
     sel = u ? u.sec : null;
   }
   const ad = $("aviso-dir"); ad.textContent = dados.aviso_diretorio || ""; ad.hidden = !dados.aviso_diretorio;
-  desenhar(); preencher(); travar(ocupado);
+  desenhar(); preencher(manter); desenharMacros(); travar(ocupado);
 }
 
-async function fazer(f, msg) {
+async function fazer(f, msg, manter) {
   if (ocupado) return;
   travar(true); status("Aguarde...");
-  try { await f(); await carregar(); status(msg, "ok"); }
+  let r;
+  try { r = await f(); await carregar(manter); status(msg, "ok"); }
   catch (e) { status(e.message, "erro"); }
   finally { travar(false); }
+  return r;
 }
 
-// manda só o que o usuário mudou em relação ao que o formulário mostrou ao preencher
-function corpo(extra) {
-  const c = {}, i = inicial;
-  const num = (id, nome) => {
-    const n = parseInt($(id).value, 10);
-    if (isNaN(n)) throw new Error("Preencha um valor válido em " + nome + ".");
-    return n;
+$("gravar").onclick = () => {
+  let c;
+  try { c = corpo(); } catch (e) { status(e.message, "erro"); return; }
+  fazer(() => api("POST", "/api/vagas/" + sel, c), "Gravado e verificado");
+};
+$("usar").onclick = () => {
+  const ir = () => fazer(() => api("POST", "/api/vagas/" + sel + "/usar"), "Vaga em uso agora");
+  if (alterado()) pedirDescarte(ir, $("usar")); else ir();
+};
+
+// ---------- modais ----------
+let modalAberto = null, retorno = null;
+function abrirModal(m, foco, volta) { modalAberto = m; retorno = volta; m.hidden = false; foco.focus(); }
+function fecharModal() { if (!modalAberto) return; modalAberto.hidden = true; modalAberto = null; if (retorno) retorno.focus(); }
+$("restaurar").onclick = () => abrirModal($("confirma"), $("nao"), $("restaurar"));
+document.addEventListener("keydown", e => {
+  if (!modalAberto) return;
+  if (e.key === "Escape") fecharModal();
+  if (e.key === "Tab") {
+    e.preventDefault();
+    const bs = modalAberto.querySelectorAll("button");
+    (document.activeElement === bs[0] ? bs[1] : bs[0]).focus();
+  }
+});
+$("nao").onclick = fecharModal;
+$("sim").onclick = () => { fecharModal(); fazer(() => api("POST", "/api/vagas/" + sel + "/restaurar"), "Vaga restaurada"); };
+$("nao-m").onclick = fecharModal;
+$("nao-d").onclick = fecharModal;
+
+// ---------- macros ----------
+function resumo(passos) {
+  const ap = passos.filter(p => p.tipo === "aperta").map(p => rotulo(p.mod, p.tecla));
+  const es = passos.filter(p => p.tipo === "espera").map(p => p.ms);
+  if (!passos.length) return "(vazia)";
+  if (es.length && es.every(x => x === es[0]) && ap.length === passos.filter(p => p.tipo === "solta").length)
+    return ap.join(" ") + " (espera " + es[0] + " ms)";
+  return passos.filter(p => p.tipo !== "solta").map(p => p.tipo === "aperta" ? rotulo(p.mod, p.tecla) : "espera " + p.ms + " ms").join(", ");
+}
+const ESTADOS = { vazia: "Vazia", ok: "Pronta", invalida: "Inválida" };
+
+function desenharMacros() {
+  const box = $("lista-macros"); box.textContent = "";
+  for (const m of dados.macros) {
+    const usos = m.usada_por.map(u => "Vaga " + u.vaga + ", " + (u.camada === "gshift" ? "G-Shift" : "normal") + ", " + (CLIQUES.find(c => c[0] === u.botao) || [0, u.botao])[1]);
+    const info = el("div", { className: "info" }, el("b", { textContent: "Macro " + m.sec + " (" + (ESTADOS[m.estado] || m.estado) + ")" }));
+    if (m.estado === "ok") info.append(el("span", { textContent: resumo(m.passos) }));
+    info.append(el("span", { textContent: usos.length ? "Usada por: " + usos.join("; ") : "Não usada" }));
+    const ed = el("button", { className: "acao peq", textContent: "Editar" });
+    ed.onclick = () => abrirMacro(m, null);
+    const ap = el("button", { className: "acao peq", textContent: "Apagar" });
+    ap.dataset.bloq = (usos.length || m.estado === "vazia") ? "1" : "0";
+    ap.disabled = ocupado || ap.dataset.bloq === "1";
+    if (usos.length) ap.title = "Em uso: tire a macro dos botões antes de apagar.";
+    else if (m.estado === "vazia") ap.title = "Setor já vazio.";
+    ap.onclick = () => {
+      $("confm-texto").textContent = "Apagar a macro " + m.sec + "?";
+      $("sim-m").onclick = () => { fecharModal(); fazer(() => api("POST", "/api/macros/" + m.sec + "/apagar"), "Macro apagada", true).then(() => $("nova-macro").focus()); };
+      abrirModal($("confirma-m"), $("nao-m"), ap);
+    };
+    box.append(el("div", { className: "macro" }, info, el("div", { className: "botoes-m" }, ed, ap)));
+  }
+  if (mEd) desenharMEdit();
+}
+
+// mEd: { sec, modo, passos, texto, espera, para }
+function abrirMacro(m, para) {
+  mEd = { sec: m ? m.sec : null, modo: "passos", passos: m && m.estado === "ok" ? m.passos.map(p => Object.assign({}, p)) : [],
+    texto: "", espera: 30, para };
+  desenharMEdit();
+  $("medit").scrollIntoView({ block: "nearest" });
+}
+$("nova-macro").onclick = () => abrirMacro(null, null);
+
+function desenharMEdit() {
+  const box = $("medit"); box.textContent = "";
+  box.hidden = false;
+  box.append(el("b", { textContent: mEd.sec === null ? "Nova macro" : "Editando macro " + mEd.sec }));
+  const modos = el("div", { className: "modos" });
+  for (const [v, t] of [["texto", "Texto"], ["passos", "Passos"]]) {
+    const r = el("input", { type: "radio", name: "mmodo", checked: mEd.modo === v });
+    r.onchange = () => { mEd.modo = v; desenharMEdit(); };
+    modos.append(el("label", { className: "mini" }, r, t));
+  }
+  box.append(modos);
+  if (mEd.modo === "texto") {
+    const t = el("input", { type: "text", value: mEd.texto });
+    t.setAttribute("aria-label", "Texto da macro");
+    t.oninput = () => { mEd.texto = t.value; };
+    const e = el("input", { type: "number", min: 1, max: 65535, value: mEd.espera });
+    e.setAttribute("aria-label", "Espera em ms");
+    e.oninput = () => { mEd.espera = parseInt(e.value, 10); };
+    box.append(t, el("div", { className: "nota", textContent: "Aceita só letras, números e espaço (sem acentos)." }),
+      el("div", { className: "passo" }, "Espera entre teclas (ms):", e));
+  } else {
+    mEd.passos.forEach((p, i) => box.append(linhaPasso(p, i)));
+    const bar = el("div", { className: "linha" });
+    for (const [t, tx] of [["aperta", "Adicionar aperta"], ["solta", "Adicionar solta"], ["espera", "Adicionar espera"]]) {
+      const b = el("button", { className: "acao peq", textContent: tx });
+      b.onclick = () => { mEd.passos.push(t === "espera" ? { tipo: t, ms: 50 } : { tipo: t, mod: 0, tecla: 4 }); desenharMEdit(); };
+      bar.append(b);
+    }
+    box.append(bar);
+  }
+  const salvar = el("button", { className: "acao prim", textContent: "Salvar macro" });
+  salvar.onclick = salvarMacro;
+  const canc = el("button", { className: "acao", textContent: "Cancelar" });
+  canc.onclick = () => {
+    const p = mEd.para;
+    if (p && p.antes && est) { est.botoes[p.cam][p.i] = p.antes; desenharBotoes(); }
+    mEd = null; box.hidden = true; };
+  box.append(el("div", { className: "linha" }, salvar, canc));
+  travar(ocupado);
+}
+
+function linhaPasso(p, i) {
+  const div = el("div", { className: "passo" });
+  const tipo = el("select"); for (const [v, t] of [["aperta", "Aperta"], ["solta", "Solta"], ["espera", "Espera"]]) tipo.append(opcao(v, t));
+  tipo.value = p.tipo;
+  tipo.onchange = () => { mEd.passos[i] = tipo.value === "espera" ? { tipo: "espera", ms: 50 } : { tipo: tipo.value, mod: p.mod || 0, tecla: p.tecla || 4 }; desenharMEdit(); };
+  div.append(tipo);
+  if (p.tipo === "espera") {
+    const n = el("input", { type: "number", min: 1, max: 65535, value: p.ms });
+    n.setAttribute("aria-label", "Espera em ms");
+    n.oninput = () => { p.ms = parseInt(n.value, 10); };
+    div.append(n, "ms");
+  } else div.append(caixaTecla(p.tecla, u => { p.tecla = u; }), caixasMod(p.mod, m => { p.mod = m; }));
+  const mv = (d, tx) => {
+    const b = el("button", { className: "acao peq", textContent: tx, title: d < 0 ? "Mover para cima" : "Mover para baixo" });
+    b.onclick = () => { const j = i + d; if (j < 0 || j >= mEd.passos.length) return; [mEd.passos[i], mEd.passos[j]] = [mEd.passos[j], mEd.passos[i]]; desenharMEdit(); };
+    return b;
   };
-  if ((extra && extra.um_dpi_so) || $("dpi").value !== i.dpi) c.dpi = num("dpi", "DPI");
-  if ($("polling").value !== i.polling) c.polling_hz = num("polling", "Polling");
-  if ($("lod").value !== i.lod) c.lod = num("lod", "LOD");
-  if ($("ativa").checked !== i.ativa) c.ativa = $("ativa").checked;
-  if ($("nome").value !== i.nome) c.nome = $("nome").value;
-  return Object.assign(c, extra || {});
+  const rem = el("button", { className: "acao peq", textContent: "Remover" });
+  rem.onclick = () => { mEd.passos.splice(i, 1); desenharMEdit(); };
+  div.append(mv(-1, "Subir"), mv(1, "Descer"), rem);
+  return div;
 }
 
-$("gravar").onclick = () => fazer(() => api("POST", "/api/vagas/" + sel, corpo()), "Gravado e verificado");
-$("umdpi").onclick = () => fazer(() => api("POST", "/api/vagas/" + sel, corpo({ um_dpi_so: true })), "Gravado e verificado");
-$("usar").onclick = () => fazer(() => api("POST", "/api/vagas/" + sel + "/usar"), "Vaga em uso agora");
-$("restaurar").onclick = () => { $("confirma").hidden = false; };
-$("nao").onclick = () => { $("confirma").hidden = true; };
-$("sim").onclick = () => { $("confirma").hidden = true; fazer(() => api("POST", "/api/vagas/" + sel + "/restaurar"), "Vaga restaurada"); };
+async function salvarMacro() {
+  let c;
+  if (mEd.modo === "texto") {
+    if (!mEd.texto) return status("Digite o texto da macro.", "erro");
+    if (!/^[A-Za-z0-9 ]+$/.test(mEd.texto)) return status("O texto aceita só letras, números e espaço.", "erro");
+    if (!Number.isInteger(mEd.espera) || mEd.espera < 1 || mEd.espera > 65535) return status("Espera deve ficar entre 1 e 65535 ms.", "erro");
+    c = { texto: mEd.texto, espera_ms: mEd.espera };
+  } else {
+    if (!mEd.passos.length) return status("Adicione ao menos um passo.", "erro");
+    if (mEd.passos.some(p => p.tipo === "espera" ? !(p.ms >= 1 && p.ms <= 65535) : !p.tecla)) return status("Confira os passos: espera de 1 a 65535 ms.", "erro");
+    c = { passos: mEd.passos.map(p => p.tipo === "espera" ? { tipo: "espera", ms: p.ms } : { tipo: p.tipo, mod: p.mod, tecla: p.tecla }) };
+  }
+  const para = mEd.para;
+  const r = await fazer(() => api("POST", "/api/macros" + (mEd.sec === null ? "" : "/" + mEd.sec), c), "Macro gravada", true);
+  if (!r) return;
+  mEd = null; $("medit").hidden = true;
+  if (para && est) {
+    est.botoes[para.cam][para.i] = { tipo: "macro", sec: r.sec, offset: 0 };
+    desenharBotoes();
+  }
+}
 
 const sinal = () => fetch("/api/sinal", { method: "POST" }).catch(() => {});
 sinal(); setInterval(sinal, 30000);

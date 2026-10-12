@@ -19,6 +19,7 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         s = dict(B)
+        s.update({m: b"\xff" * 255 for m in range(6, 16)})
         s[perfil.ROM_FABRICA] = B[3][:-2] + b"\x00\x03"
         self.mouse = MouseFalso(s, em_uso=1)
         self.backup = os.path.join(self.tmp.name, "bk.json")
@@ -44,7 +45,7 @@ class TestCorrecoesFinais(Base):
         self.assertTrue(crc_ok(self.mouse.setores[2]))
         with open(self.backup) as f:
             bk = json.load(f)
-        self.assertEqual(sorted(bk), [f"{s:#06x}" for s in range(6)])
+        self.assertEqual(sorted(bk), [f"{s:#06x}" for s in range(16)])
 
     def test_backup_com_setor_crc_ruim_guarda_os_bons_integros(self):
         estragar_crc(self.mouse, 2)
@@ -82,7 +83,7 @@ class TestCorrecoesFinais(Base):
             orig(sec)
         self.mouse.definir_perfil = definir
         with self.assertRaises(ErroPainel):
-            self.painel.gravar(1, dpi=800)
+            self.painel.gravar(1, niveis=[800])
 
     def test_vaga_integra_com_leitura_ruim_transitoria(self):
         reais = self.mouse.ler_setor
@@ -95,7 +96,7 @@ class TestCorrecoesFinais(Base):
             return reais(sec, crc)
         self.mouse.ler_setor = ler
         antes = self.mouse.setores[2]
-        self.painel.gravar(2, dpi=800)
+        self.painel.gravar(2, niveis=[800])
         self.assertEqual(perfil.ler_vaga(self.mouse.setores[2])["dpis"], [800])
         self.assertNotEqual(antes, self.mouse.setores[2])
 
@@ -128,7 +129,7 @@ class TestPainel(Base):
 
     def test_gravar_dpi(self):
         orig = self.mouse.setores[1]
-        self.painel.gravar(1, dpi=800)
+        self.painel.gravar(1, niveis=[800])
         self.assertEqual(perfil.ler_vaga(self.mouse.setores[1])["dpis"], [800])
         self.assertEqual(len(self.hist()), 1)
         self.assertTrue(os.path.exists(self.backup))
@@ -139,12 +140,12 @@ class TestPainel(Base):
     def test_backup_mantido(self):
         with open(self.backup, "w") as f:
             f.write("{}")
-        self.painel.gravar(1, dpi=800)
+        self.painel.gravar(1, niveis=[800])
         with open(self.backup) as f:
             self.assertEqual(f.read(), "{}")
 
     def test_definir_original_depois(self):
-        self.painel.gravar(2, dpi=800)
+        self.painel.gravar(2, niveis=[800])
         defs = [e for e in self.mouse.log if e[0] == "definir"]
         self.assertEqual(defs, [("definir", 2), ("definir", 1)])
 
@@ -152,7 +153,7 @@ class TestPainel(Base):
         orig = self.mouse.setores[1]
         self.mouse.falhar_gravacao_em = 1
         with self.assertRaises(ErroPainel):
-            self.painel.gravar(1, dpi=800)
+            self.painel.gravar(1, niveis=[800])
         self.assertEqual(self.mouse.setores[1], orig)
         self.assertEqual(self.mouse.log[-1], ("definir", 1))
 
@@ -170,7 +171,7 @@ class TestPainel(Base):
             self.painel.gravar(2, ativa=False)
 
     def test_ligar_vaga_um_dpi(self):
-        self.painel.gravar(3, ativa=True, dpi=1000, um_dpi_so=True)
+        self.painel.gravar(3, ativa=True, niveis=[1000])
         self.assertIn((3, True), self.mouse.diretorio())
         self.assertEqual(perfil.ler_vaga(self.mouse.setores[3])["dpis"], [1000])
         gravs = [e for e in self.mouse.log if e[0] == "gravar"]
@@ -205,7 +206,7 @@ class TestPainel(Base):
         self.assertEqual(self.mouse.setores[1], com_crc(self.mouse.setores[perfil.ROM_FABRICA]))
 
     def test_threads(self):
-        ts = [threading.Thread(target=self.painel.gravar, args=(s,), kwargs={"dpi": 800}) for s in (1, 2)]
+        ts = [threading.Thread(target=self.painel.gravar, args=(s,), kwargs={"niveis": [800]}) for s in (1, 2)]
         for t in ts:
             t.start()
         for t in ts:
@@ -221,11 +222,11 @@ class TestPainel(Base):
         self.mouse.falhar_gravacao_em = 0
         orig = self.mouse.setores[2]
         with self.assertRaises(ErroPainel):
-            self.painel.gravar(2, ativa=False, dpi=800)
+            self.painel.gravar(2, ativa=False, niveis=[800])
         self.assertEqual(self.mouse.setores[2], orig)
         orig3 = self.mouse.setores[3]
         with self.assertRaises(ErroPainel):
-            self.painel.gravar(3, ativa=True, dpi=1000, um_dpi_so=True)
+            self.painel.gravar(3, ativa=True, niveis=[1000])
         self.assertEqual(self.mouse.setores[3], orig3)
 
     def test_crc_ruim(self):
@@ -235,8 +236,171 @@ class TestPainel(Base):
         v = {x["sec"]: x for x in self.painel.listar()["vagas"]}
         self.assertTrue(v[2]["aviso"])
         with self.assertRaises(ErroPainel) as c:
-            self.painel.gravar(2, dpi=800)
+            self.painel.gravar(2, niveis=[800])
         self.assertIn("restaur", str(c.exception).lower())
+
+
+class TestMacros(Base):
+    PASSOS = [{"tipo": "aperta", "mod": 0, "tecla": 4}, {"tipo": "solta", "mod": 0, "tecla": 4}]
+
+    def liga(self, sec_vaga, sec_macro, i=3, camada="botoes"):
+        v = perfil.ler_vaga(self.mouse.setores[sec_vaga])
+        lista = list(v[camada])
+        lista[i] = {"tipo": "macro", "sec": sec_macro, "offset": 0}
+        self.painel.gravar(sec_vaga, **{camada: lista})
+
+    def test_listar_vaga_2_com_macro_vazia(self):
+        r = self.painel.listar()
+        v = {x["sec"]: x for x in r["vagas"]}
+        b = v[2]["botoes"][3]
+        self.assertEqual((b["tipo"], b["sec"], b["macro_estado"]), ("macro", 6, "vazia"))
+        self.assertEqual(b["aviso"], "Botão voltar: macro no setor 6 está vazia, o botão não faz nada")
+        self.assertIn("G-Shift, botão voltar", v[2]["gshift"][3]["aviso"])
+        self.assertEqual([m["sec"] for m in r["macros"]], list(range(6, 16)))
+        self.assertEqual(r["macros"][0]["usada_por"][0], {"vaga": 2, "camada": "normal", "botao": "voltar", "offset": 0})
+        self.assertEqual(v[3]["niveis"], [800, 1200, 1600, 2400, 3200])
+
+    def test_especial_testado(self):
+        l = list(perfil.ler_vaga(self.mouse.setores[1])["gshift"])
+        l[0] = {"tipo": "especial", "codigo": "ciclo_dpi"}
+        l[1] = {"tipo": "especial", "codigo": "gshift"}
+        self.painel.gravar(1, gshift=l)
+        g = {x["sec"]: x for x in self.painel.listar()["vagas"]}[1]["gshift"]
+        self.assertIs(g[0]["testado"], True)
+        self.assertIs(g[1]["testado"], False)
+
+    def test_alocacao_pula_referenciado(self):
+        # setor 6 está vazio mas referenciado pela vaga 2: a nova macro vai para o 7
+        self.assertEqual(self.painel.gravar_macro(None, self.PASSOS), 7)
+        self.assertEqual(self.painel.gravar_macro(None, self.PASSOS), 8)
+        m = {x["sec"]: x for x in self.painel.listar()["macros"]}
+        self.assertEqual(m[7]["estado"], "ok")
+        self.assertEqual(len(m[7]["passos"]), 2)
+        self.assertTrue(crc_ok(self.mouse.setores[7]))
+        self.assertEqual(len([h for h in self.hist() if "setor7" in h]), 1)
+
+    def test_gravar_macro_recusa_referencia_com_offset(self):
+        # vaga 2 G-Shift voltar aponta para o setor 6 com offset 2
+        d = bytearray(self.mouse.setores[2])
+        o = perfil.CAMADA_GSHIFT + 4 * 3
+        d[o:o + 4] = bytes([0x00, 0x06, 0x00, 0x02])
+        self.mouse.setores[2] = perfil.com_crc(bytes(d))
+        with self.assertRaises(ErroPainel) as c:
+            self.painel.gravar_macro(6, self.PASSOS)
+        self.assertIn("vaga 2", str(c.exception))
+        self.assertIn("G-Shift", str(c.exception))
+        self.assertEqual(self.mouse.setores[6], b"\xff" * 255)
+
+    def test_rollback_macro_sem_crc_volta_vazia_com_crc(self):
+        original = self.mouse.gravar_verificado
+        falhou = []
+
+        def gravar(sec, data):
+            if sec == 9 and not falhou:
+                falhou.append(1)
+                raise IOError("falha simulada")
+            original(sec, data)
+        self.mouse.gravar_verificado = gravar
+        with self.assertRaises(ErroPainel):
+            self.painel.gravar_macro(9, self.PASSOS)
+        self.assertEqual(self.mouse.setores[9], perfil.com_crc(b"\xff" * 255))
+
+    def test_alocacao_prefere_vazia_a_invalida(self):
+        self.mouse.setores[7] = b"\x77" * 255
+        self.assertEqual(self.painel.gravar_macro(None, self.PASSOS), 8)
+
+    def test_macro_invalida_e_orfa(self):
+        for s in range(7, 16):  # sem setor vazio, lixo sem referência é reaproveitado
+            self.mouse.setores[s] = b"\x77" * 255
+        self.assertEqual(self.painel.gravar_macro(None, self.PASSOS), 7)
+        self.painel.gravar_macro(9, self.PASSOS)
+        m = {x["sec"]: x for x in self.painel.listar()["macros"]}
+        self.assertEqual(m[9]["usada_por"], [])  # órfã aparece na lista
+        self.assertEqual(m[9]["estado"], "ok")
+
+    def test_passos_invalidos(self):
+        with self.assertRaises(ErroPainel):
+            self.painel.gravar_macro(None, [self.PASSOS[0]])
+        with self.assertRaises(ErroPainel):
+            self.painel.gravar_macro(5, self.PASSOS)
+        self.assertEqual(self.hist(), [])
+
+    def test_sem_setor_livre(self):
+        for s in range(7, 16):
+            self.painel.gravar_macro(s, self.PASSOS)
+        # o 6 está referenciado pela vaga 2
+        with self.assertRaises(ErroPainel):
+            self.painel.gravar_macro(None, self.PASSOS)
+
+    def test_apagar(self):
+        self.painel.gravar_macro(8, self.PASSOS)
+        self.painel.apagar_macro(8)
+        self.assertEqual(self.mouse.setores[8], perfil.com_crc(b"\xff" * 255))
+        n = len(self.hist())
+        self.painel.apagar_macro(8)  # já vazia: nada a gravar
+        self.assertEqual(len(self.hist()), n)
+
+    def test_apagar_referenciado_recusado(self):
+        with self.assertRaises(ErroPainel) as c:
+            self.painel.apagar_macro(6)
+        self.assertIn("vaga 2", str(c.exception))
+        self.assertIn("voltar", str(c.exception))
+        self.assertEqual(self.mouse.setores[6], b"\xff" * 255)
+
+    def test_ordem_macro_antes_do_perfil(self):
+        self.painel.gravar_macro(8, self.PASSOS)
+        self.liga(1, 8)
+        gravs = [e[1] for e in self.mouse.log if e[0] == "gravar"]
+        self.assertEqual(gravs, [8, 1])
+        self.assertEqual(perfil.ler_vaga(self.mouse.setores[1])["botoes"][3],
+                         {"tipo": "macro", "sec": 8, "offset": 0})
+
+    def test_ligar_macro_vazia_recusado_mas_edicao_do_perfil_2_ok(self):
+        l = list(perfil.ler_vaga(self.mouse.setores[1])["botoes"])
+        l[3] = {"tipo": "macro", "sec": 9, "offset": 0}
+        with self.assertRaises(ErroPainel) as c:
+            self.painel.gravar(1, botoes=l)
+        self.assertIn("macro", str(c.exception))
+        # perfil 2 já aponta para a macro vazia 6: editar outro campo continua permitido
+        b2 = perfil.ler_vaga(self.mouse.setores[2])["botoes"]
+        self.painel.gravar(2, botoes=b2, lod=3)
+        self.assertEqual(perfil.ler_vaga(self.mouse.setores[2])["lod"], 3)
+
+    def test_recarrega_perfil_em_uso(self):
+        self.painel.gravar_macro(8, self.PASSOS)
+        self.liga(1, 8)
+        self.mouse.log.clear()
+        self.painel.gravar_macro(8, self.PASSOS + [{"tipo": "espera", "ms": 10}])
+        self.assertEqual(self.mouse.log.count(("definir", 1)), 1)
+        self.mouse.log.clear()
+        self.painel.gravar_macro(9, self.PASSOS)  # não referenciada: sem recarga
+        self.assertNotIn("definir", [e[0] for e in self.mouse.log])
+
+    def test_backup_macros_a_parte(self):
+        with open(self.backup, "w") as f:
+            json.dump({f"{s:#06x}": B[s].hex() for s in range(6)}, f)
+        self.painel.gravar_macro(8, self.PASSOS)
+        arq = os.path.join(self.tmp.name, "dados", "backup_macros.json")
+        with open(arq) as f:
+            bk = json.load(f)
+        self.assertEqual(sorted(bk), [f"{s:#06x}" for s in range(6, 16)])
+        self.assertEqual(bk["0x0008"], ("ff" * 255))
+        self.painel.gravar_macro(9, self.PASSOS)
+        with open(arq) as f:
+            self.assertEqual(json.load(f), bk)  # não sobrescreve
+
+    def test_backup_novo_cobre_macros(self):
+        self.painel.gravar_macro(8, self.PASSOS)
+        with open(self.backup) as f:
+            self.assertEqual(len(json.load(f)), 16)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "dados", "backup_macros.json")))
+
+    def test_gravar_niveis_e_indices(self):
+        self.painel.gravar(3, niveis=[800, 1600], dpi_padrao=1, dpi_shift=0)
+        v = {x["sec"]: x for x in self.painel.listar()["vagas"]}[3]
+        self.assertEqual((v["niveis"], v["dpi_padrao"], v["dpi_shift"]), ([800, 1600], 1, 0))
+        with self.assertRaises(ErroPainel):
+            self.painel.gravar(3, dpi_padrao=2)
 
 
 if __name__ == "__main__":

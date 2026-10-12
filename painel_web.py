@@ -9,10 +9,12 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+import acoes
 from painel_core import ErroPainel
 
 PAGINA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "painel", "index.html")
-CAMPOS = ("dpi", "polling_hz", "lod", "um_dpi_so", "ativa", "nome")
+CAMPOS = ("niveis", "dpi_padrao", "dpi_shift", "lod", "polling_hz", "botoes", "gshift", "ativa", "nome")
+ROTA_MACRO = re.compile(r"^/api/macros(?:/(\d+)(?:/(apagar))?)?$")
 ROTA_VAGA = re.compile(r"^/api/vagas/(\d+)(?:/(usar|restaurar))?$")
 LIMITE_CORPO = 65536
 SEM_SINAL_S = 120
@@ -21,8 +23,12 @@ SEM_SINAL_S = 120
 def validar_campos(campos):
     """Devolve uma mensagem de erro em português, ou None se os tipos estão certos."""
     for k, v in campos.items():
-        if k in ("ativa", "um_dpi_so"):
+        if k == "ativa":
             ok = isinstance(v, bool)
+        elif k == "niveis":
+            ok = isinstance(v, list) and all(isinstance(n, int) and not isinstance(n, bool) for n in v)
+        elif k in ("botoes", "gshift"):
+            ok = isinstance(v, list) and all(isinstance(a, dict) for a in v)
         elif k == "nome":
             ok = isinstance(v, str)
         else:
@@ -102,6 +108,9 @@ class Handler(BaseHTTPRequestHandler):
         if caminho == "/api/sinal":
             self.server.ultimo_sinal = time.monotonic()
             return self._json(204)
+        mm = ROTA_MACRO.match(caminho)
+        if mm:
+            return self._post_macro(mm)
         m = ROTA_VAGA.match(caminho)
         if not m:
             return self._json(404, {"erro": "não encontrado"})
@@ -111,6 +120,16 @@ class Handler(BaseHTTPRequestHandler):
             return self._executar(p.usar_agora, sec)
         if acao == "restaurar":
             return self._executar(p.restaurar, sec)
+        dados = self._corpo()
+        if dados is None:
+            return
+        campos = {k: v for k, v in dados.items() if k in CAMPOS}
+        erro = validar_campos(campos)
+        if erro:
+            return self._json(400, {"erro": erro})
+        self._executar(p.gravar, sec, **campos)
+
+    def _corpo(self):
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n < 0 or n > LIMITE_CORPO:
@@ -118,13 +137,30 @@ class Handler(BaseHTTPRequestHandler):
             dados = json.loads(self.rfile.read(n) or b"{}")
             if not isinstance(dados, dict):
                 raise ValueError
+            return dados
         except (ValueError, RecursionError):
-            return self._json(400, {"erro": "corpo inválido"})
-        campos = {k: v for k, v in dados.items() if k in CAMPOS}
-        erro = validar_campos(campos)
-        if erro:
-            return self._json(400, {"erro": erro})
-        self._executar(p.gravar, sec, **campos)
+            self._json(400, {"erro": "corpo inválido"})
+
+    def _post_macro(self, mm):
+        p = self.server.painel
+        if mm.group(2):
+            return self._executar(lambda: {"sec": p.apagar_macro(int(mm.group(1)))})
+        dados = self._corpo()
+        if dados is None:
+            return
+        try:
+            if "texto" in dados:
+                if not isinstance(dados["texto"], str):
+                    raise ValueError("Texto inválido.")
+                passos = acoes.texto_para_passos(dados["texto"], dados.get("espera_ms", 30))
+            else:
+                passos = dados.get("passos")
+                if not isinstance(passos, list) or not all(isinstance(x, dict) for x in passos):
+                    raise ValueError("Informe passos ou texto.")
+        except ValueError as e:
+            return self._json(400, {"erro": str(e)})
+        sec = int(mm.group(1)) if mm.group(1) else None
+        self._executar(lambda: {"sec": p.gravar_macro(sec, passos)})
 
     def _executar(self, f, *args, **kw):
         try:

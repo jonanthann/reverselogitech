@@ -36,6 +36,7 @@ Os perfis 1 e 2 ficaram em 2000 Hz e 1600 DPI, gravados na memória interna. A c
 | `testar_host_mode.py` | Diagnóstico: testa a taxa em modo host. |
 | `painel_web.py` | Servidor do painel. |
 | `painel_core.py` | Regras de gravação do painel. |
+| `acoes.py` | Ações de botão (4 bytes) e macros. |
 | `perfil.py` | Leitura e montagem dos setores de perfil. |
 | `painel/index.html` | Página do painel. |
 | `udev/70-prox2-hidraw.rules` | Regra udev que libera o hidraw do receptor para o seu usuário. |
@@ -56,8 +57,8 @@ python3 prox2.py restaurar arquivo.json [--sim]
 
 - `status` mostra o estado atual dos perfis.
 - `rate N` grava a taxa em Hz. Por padrão vale para todos os perfis ativos. Com `--perfil N` (um ou mais setores, de 1 a 5), só para esses perfis.
-- `dpi N` grava o DPI (X e Y iguais). Por padrão vale para todos os perfis ativos. Com `--perfil N` (um ou mais setores, de 1 a 5), só para esses perfis. Só aceita perfis com um único nível de DPI, porque o índice do nível ativo ainda não foi confirmado. Valores fora das faixas do sensor são recusados, com sugestão dos mais próximos.
-- `backup` salva os perfis num arquivo JSON.
+- `dpi N` grava o DPI (X e Y iguais). Por padrão vale para todos os perfis ativos. Com `--perfil N` (um ou mais setores, de 1 a 5), só para esses perfis. Só aceita perfis com um único nível de DPI (para vários níveis, use o painel). Valores fora das faixas do sensor são recusados, com sugestão dos mais próximos.
+- `backup` salva os setores 0..15 (perfis e macros) num arquivo JSON.
 - `restaurar` grava de volta os perfis de um arquivo JSON. A opção `--sim` é opcional. Setores do arquivo com CRC inválido são pulados com aviso, e os demais são restaurados.
 
 Na primeira gravação, o `prox2.py` cria o backup automático `prox2_backup_perfis.json`. Se o arquivo já existir, ele não é sobrescrito.
@@ -77,11 +78,16 @@ A página mostra as 5 vagas (perfis) da memória interna lado a lado. Clique num
 - "Gravar no mouse": grava e confere relendo.
 - "Usar agora": troca o perfil em uso. A escolha continua depois de desligar o mouse.
 - "Restaurar": pede confirmação ("Sim, restaurar" ou "Cancelar") e então volta a vaga ao padrão de fábrica, lido da ROM do mouse: 800 a 3200 DPI em 5 níveis, 1000 Hz, LOD médio.
-- "Usar um DPI só": aparece em perfis com vários níveis de DPI.
 
-Limites: para editar o DPI de um perfil com vários níveis é preciso clicar em "Usar um DPI só", porque o índice do nível ativo ainda não foi confirmado. Não dá para desligar a vaga em uso nem a última ativa. Botões e macros não são suportados.
+DPI: de 1 a 5 níveis, de 100 a 44000. Marque qual é o nível padrão (o que o mouse usa ao ligar) e qual é o do shift (o que vale com a ação "DPI shift").
 
-Segurança: antes da primeira gravação, o backup original vai para `prox2_backup_perfis.json`. Uma cópia de cada setor anterior vai para `painel_dados/historico/`.
+Botões: os 5 botões (esquerdo, direito, meio, voltar, avançar) podem ser remapeados na camada normal e na camada G-Shift (que só vale com um botão configurado como G-Shift). Cada botão aceita clique, tecla (com modificadores), mídia, especial, macro ou desligado. Algum botão da camada normal precisa continuar com o clique esquerdo. Ações especiais testadas no mouse: ciclar DPI e DPI shift. As demais (próximo/anterior DPI, DPI padrão, próximo/anterior/ciclar perfil, G-Shift) vêm do libratbag e não foram testadas.
+
+Macros: ficam nos setores 6..15, são listadas numa seção própria (criar, editar, apagar) e cada passo é apertar tecla, soltar tecla ou esperar (ms). Toda tecla apertada precisa ser solta no fim. Dá para gerar os passos a partir de um texto (letras, números, espaço, Enter e Tab). Não dá para apagar uma macro que um botão usa.
+
+Limites: não dá para desligar a vaga em uso nem a última ativa.
+
+Segurança: antes da primeira gravação, o backup original vai para `prox2_backup_perfis.json`. Se o backup antigo tiver só os setores 0..5, os setores de macro 6..15 vão uma vez para `painel_dados/backup_macros.json`. Uma cópia de cada setor anterior vai para `painel_dados/historico/`.
 
 A interface do painel é em português, como o resto do programa.
 
@@ -121,18 +127,40 @@ Feature HID++ 0x8100 (onboard profiles) e 0x8061 (extended report rate).
 
 ### Layout do perfil
 
-Cada perfil ocupa os setores 1..5, com 255 bytes. Os 2 últimos bytes são o CRC-CCITT (init `0xFFFF`, poly `0x1021`, big-endian).
+Cada perfil ocupa os setores 1..5, com 255 bytes. Macros ficam nos setores 6..15. Os 2 últimos bytes são o CRC-CCITT (init `0xFFFF`, poly `0x1021`, big-endian).
 
 | Byte | Conteúdo |
 |---|---|
 | 0 | Taxa realmente usada pelo mouse |
 | 1 | Taxa que o mouse informa (`getReportRate` da feature 0x8061) |
-| 2 e 3 | Ainda não confirmados |
+| 2 | Nível de DPI padrão (índice de 0 a 4) |
+| 3 | Nível de DPI do shift (índice de 0 a 4) |
 | 4 em diante | DPI: 5 entradas de 5 bytes |
+| 48 a 67 | Ações dos 5 botões na camada normal, 4 bytes cada (48+4i) |
+| 112 a 131 | Ações dos 5 botões na camada G-Shift (112+4i) |
 | 160 a 207 | Nome do perfil, UTF-16LE (`ff` = sem nome) |
 | 253 e 254 | CRC |
 
 Cada entrada de DPI tem X (2 bytes, little-endian), Y (2 bytes, little-endian) e 1 byte com o LOD (lift-off). O LOD da entrada k fica no byte 8+5k: 1 é baixo, 2 é médio, 3 é alto. Foi confirmado no sensor e num teste físico.
+
+Formato das ações de botão (4 bytes):
+
+| Bytes | Ação |
+|---|---|
+| `80 01 00 <máscara>` | Clique: 01 esquerdo, 02 direito, 04 meio, 08 voltar, 10 avançar |
+| `80 02 <mod> <tecla>` | Tecla HID com modificadores |
+| `80 03 <hi> <lo>` | Mídia (código de 16 bits) |
+| `90 <código> 00 00` | Especial: 03 próximo DPI, 04 DPI anterior, 05 ciclo DPI, 06 DPI padrão, 07 shift DPI, 08 próximo perfil, 09 perfil anterior, 0a ciclo perfil, 0b G-Shift |
+| `00 <setor> 00 <offset>` | Macro no setor 6..15, a partir do offset |
+| `ff ff ff ff` | Desligado |
+
+Só 05 e 07 foram testados. Os outros códigos vêm do libratbag.
+
+### Macros
+
+Cada macro fica num setor de 6 a 15, com 253 bytes úteis e CRC nos 2 últimos. Itens de 3 bytes: `43 <mod> <tecla>` aperta, `44 <mod> <tecla>` solta, `40 <ms hi> <ms lo>` espera (milissegundos, big-endian) e `ff` marca o fim. Os itens podem cruzar blocos de 16 bytes (testado). O setor de macro exige CRC: gravar sem CRC dá erro HID++ 0x4. Setor de macro vazio é todo `ff` com CRC.
+
+Quando o mouse troca o nível de DPI, ele avisa com o evento HID++ `11 01 0d 10 <nível>`.
 
 Os valores de taxa são índices:
 
@@ -164,11 +192,11 @@ Foi assim que isso foi provado:
 
 ## Por que o Solaar falha
 
-O Solaar assume o layout antigo de perfil: DPI em 2 bytes a partir do byte 3 e polling só no byte 0. No formato 7 do PRO X 2, o DPI são 5 entradas de 5 bytes a partir do byte 4, e a taxa está nos bytes 0 e 1. O Solaar interpreta os bytes errados e não consegue trocar a taxa com a memória interna ativa.
+O Solaar assume o layout antigo de perfil: DPI em 2 bytes a partir do byte 3 e polling só no byte 0. O libratbag também não suporta o formato de perfil 7. No formato 7 do PRO X 2, o DPI são 5 entradas de 5 bytes a partir do byte 4, e a taxa está nos bytes 0 e 1. O Solaar interpreta os bytes errados e não consegue trocar a taxa com a memória interna ativa.
 
 ## Restaurar o original
 
-O `prox2_backup_perfis.json` guarda os setores 0..5 de antes de qualquer alteração, ou seja, o original de fábrica/G Hub. Para voltar a ele:
+O `prox2_backup_perfis.json` guarda os setores de antes de qualquer alteração, ou seja, o original de fábrica/G Hub. Backups novos (`prox2.py backup`) cobrem os setores 0..15, incluindo as macros. Na restauração, macros vazias voltam como `ff` com CRC, e macros com CRC ruim no arquivo são puladas, com aviso de que não foram restauradas (use "Restaurar" no painel para voltar essas vagas ao padrão). Para voltar ao original:
 
 ```
 python3 prox2.py restaurar prox2_backup_perfis.json [--sim]

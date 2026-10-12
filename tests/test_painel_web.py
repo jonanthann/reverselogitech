@@ -31,6 +31,7 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         s = dict(B)
+        s.update({m: b"\xff" * 255 for m in range(6, 16)})
         s[perfil.ROM_FABRICA] = B[3][:-2] + b"\x00\x03"
         self.mouse = self.classe_mouse(s, em_uso=1)
         painel = Painel(self.mouse, os.path.join(self.tmp.name, "dados"),
@@ -80,28 +81,61 @@ class TestWeb(Base):
         self.assertEqual(c, 400)
 
     def test_dpi_invalido(self):
-        c, d = self.req("POST", "/api/vagas/1", {"dpi": 1601})
+        c, d = self.req("POST", "/api/vagas/1", {"niveis": [1601]})
         self.assertEqual(c, 400)
         self.assertIn("1610", d["erro"])
 
     def test_origin_errada(self):
         antes = self.mouse.setores[1]
-        c, _ = self.req("POST", "/api/vagas/1", {"dpi": 800}, headers={"Origin": "http://evil.example"})
+        c, _ = self.req("POST", "/api/vagas/1", {"niveis": [800]}, headers={"Origin": "http://evil.example"})
         self.assertEqual(c, 403)
         self.assertEqual(self.mouse.setores[1], antes)
 
     def test_gravar(self):
-        c, d = self.req("POST", "/api/vagas/1", {"dpi": 800})
+        c, d = self.req("POST", "/api/vagas/1", {"niveis": [800]})
         self.assertEqual(c, 200)
         self.assertEqual(d["dpis"], [800])
 
     def test_tipos_invalidos(self):
         antes = dict(self.mouse.setores)
-        for corpo in ({"ativa": 0}, {"dpi": "800"}, {"ativa": "false"}, {"dpi": True}, {"nome": 5}):
+        for corpo in ({"ativa": 0}, {"niveis": "800"}, {"ativa": "false"}, {"niveis": [True]}, {"nome": 5}):
             c, d = self.req("POST", "/api/vagas/1", corpo)
             self.assertEqual(c, 400, corpo)
             self.assertIn("inválido", d["erro"])
         self.assertEqual(self.mouse.setores, antes)
+
+    def test_macros_rotas(self):
+        passos = [{"tipo": "aperta", "mod": 0, "tecla": 4}, {"tipo": "solta", "mod": 0, "tecla": 4}]
+        c, d = self.req("POST", "/api/macros", {"passos": passos})
+        self.assertEqual((c, d), (200, {"sec": 7}))  # o 6 é referenciado pela vaga 2
+        c, d = self.req("POST", "/api/macros", {"texto": "Ab 1", "espera_ms": 20})
+        self.assertEqual((c, d), (200, {"sec": 8}))
+        c, d = self.req("POST", "/api/macros/8", {"texto": "x"})
+        self.assertEqual((c, d), (200, {"sec": 8}))
+        c, d = self.req("GET", "/api/vagas")
+        self.assertEqual([m["estado"] for m in d["macros"]][1:4], ["ok", "ok", "vazia"])
+        c, d = self.req("POST", "/api/macros/8/apagar", {})
+        self.assertEqual((c, d), (200, {"sec": 8}))
+
+    def test_macros_erros(self):
+        for caminho, corpo in (("/api/macros", {}), ("/api/macros", {"passos": "x"}),
+                               ("/api/macros", {"passos": [1]}), ("/api/macros", {"passos": []}),
+                               ("/api/macros", {"texto": "é"}), ("/api/macros", {"texto": 5}),
+                               ("/api/macros", {"texto": "a", "espera_ms": 0}),
+                               ("/api/macros/5", {"texto": "a"}), ("/api/macros/6/apagar", {})):
+            c, d = self.req("POST", caminho, corpo)
+            self.assertEqual(c, 400, (caminho, corpo))
+            self.assertIn("erro", d)
+        self.assertEqual(self.req("POST", "/api/macros/abc", {})[0], 404)
+
+    def test_campos_novos_tipos(self):
+        for corpo in ({"botoes": "x"}, {"gshift": [1]}, {"niveis": [800.5]}, {"dpi_padrao": "1"}):
+            self.assertEqual(self.req("POST", "/api/vagas/1", corpo)[0], 400, corpo)
+        c, d = self.req("POST", "/api/vagas/1", {"niveis": [800, 1600], "dpi_padrao": 1})
+        self.assertEqual(c, 200)
+        self.assertEqual(d["niveis"], [800, 1600])
+        c, d = self.req("POST", "/api/vagas/1", {"botoes": [{"tipo": "desligado"}] * 5})
+        self.assertEqual(c, 400)
 
     def test_nome_real(self):
         v = self.req("GET", "/api/vagas")[1]["vagas"]

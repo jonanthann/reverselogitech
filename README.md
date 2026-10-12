@@ -38,6 +38,7 @@ Profiles 1 and 2 are set to 2000 Hz and 1600 DPI, stored in the onboard memory. 
 | `testar_host_mode.py` | Diagnostic: tests the rate in host mode. |
 | `painel_web.py` | The panel's server. |
 | `painel_core.py` | The panel's write rules. |
+| `acoes.py` | Button actions (4 bytes) and macros. |
 | `perfil.py` | Reads and builds the profile sectors. |
 | `painel/index.html` | The panel's page. |
 | `udev/70-prox2-hidraw.rules` | udev rule that opens the receiver's hidraw to your user. |
@@ -58,8 +59,8 @@ python3 prox2.py restaurar arquivo.json [--sim]
 
 - `status` shows the current state of the profiles.
 - `rate N` writes the rate in Hz. By default it applies to all active profiles. With `--perfil N` (one or more sectors, 1 to 5), only to those profiles.
-- `dpi N` writes the DPI (X and Y equal). By default it applies to all active profiles. With `--perfil N` (one or more sectors, 1 to 5), only to those profiles. It only accepts profiles with a single DPI level, because the index of the active level has not been confirmed yet. Values outside the sensor's ranges are rejected, with a suggestion of the closest ones.
-- `backup` saves the profiles to a JSON file.
+- `dpi N` writes the DPI (X and Y equal). By default it applies to all active profiles. With `--perfil N` (one or more sectors, 1 to 5), only to those profiles. It only accepts profiles with a single DPI level (use the panel for several levels). Values outside the sensor's ranges are rejected, with a suggestion of the closest ones.
+- `backup` saves sectors 0..15 (profiles and macros) to a JSON file.
 - `restaurar` (restore) writes the profiles from a JSON file back to the mouse. The `--sim` (yes) option is optional. Sectors with an invalid CRC in the file are skipped with a warning, and the rest are restored.
 
 On the first write, `prox2.py` creates the automatic backup `prox2_backup_perfis.json`. If the file already exists, it is not overwritten.
@@ -79,11 +80,16 @@ The page shows the 5 slots (profiles) of the onboard memory side by side. Click 
 - "Gravar no mouse" (write to the mouse): writes and checks by reading back.
 - "Usar agora" (use now): switches the profile in use. The choice stays after the mouse is turned off.
 - "Restaurar" (restore): asks for confirmation ("Sim, restaurar" or "Cancelar"), then puts the slot back to the factory default, read from the mouse's ROM: 800 to 3200 DPI in 5 levels, 1000 Hz, medium LOD.
-- "Usar um DPI só" (use a single DPI): appears on profiles with several DPI levels.
 
-Limits: to edit the DPI of a profile with several levels you have to click "Usar um DPI só", because the index of the active level has not been confirmed yet. You cannot turn off the slot in use or the last active one. Buttons and macros are not supported.
+DPI: 1 to 5 levels, from 100 to 44000. Mark which level is the default (the one the mouse uses at power on) and which is the shift level (the one used by the "DPI shift" action).
 
-Safety: before the first write, the original backup is saved to `prox2_backup_perfis.json`. A copy of each previous sector goes to `painel_dados/historico/`.
+Buttons: the 5 buttons (left, right, middle, back, forward) can be remapped on the normal layer and on the G-Shift layer (which only matters with a button set to G-Shift). Each button accepts click, key (with modifiers), media, special, macro or off. Some button on the normal layer must keep the left click. Special actions tested on the mouse: cycle DPI and DPI shift. The others (next/previous DPI, default DPI, next/previous/cycle profile, G-Shift) come from libratbag and are untested.
+
+Macros: they live in sectors 6..15, are listed in their own section (create, edit, delete), and each step is key down, key up or wait (ms). Every key pressed must be released by the end. Steps can be generated from text (letters, digits, space, Enter and Tab). You cannot delete a macro that a button uses.
+
+Limits: you cannot turn off the slot in use or the last active one.
+
+Safety: before the first write, the original backup is saved to `prox2_backup_perfis.json`. If the old backup only has sectors 0..5, macro sectors 6..15 go once to `painel_dados/backup_macros.json`. A copy of each previous sector goes to `painel_dados/historico/`.
 
 The panel interface is in Portuguese, like the rest of the program.
 
@@ -123,18 +129,40 @@ HID++ features 0x8100 (onboard profiles) and 0x8061 (extended report rate).
 
 ### Profile layout
 
-Each profile takes sectors 1..5, with 255 bytes. The last 2 bytes are the CRC-CCITT (init `0xFFFF`, poly `0x1021`, big-endian).
+Each profile takes sectors 1..5, with 255 bytes. Macros live in sectors 6..15. The last 2 bytes are the CRC-CCITT (init `0xFFFF`, poly `0x1021`, big-endian).
 
 | Byte | Content |
 |---|---|
 | 0 | Rate the mouse actually uses |
 | 1 | Rate the mouse reports (`getReportRate` of feature 0x8061) |
-| 2 and 3 | Not confirmed yet |
+| 2 | Default DPI level (index 0 to 4) |
+| 3 | Shift DPI level (index 0 to 4) |
 | 4 onward | DPI: 5 entries of 5 bytes |
+| 48 to 67 | Actions of the 5 buttons on the normal layer, 4 bytes each (48+4i) |
+| 112 to 131 | Actions of the 5 buttons on the G-Shift layer (112+4i) |
 | 160 to 207 | Profile name, UTF-16LE (`ff` = no name) |
 | 253 and 254 | CRC |
 
 Each DPI entry has X (2 bytes, little-endian), Y (2 bytes, little-endian) and 1 byte with the LOD (lift-off distance). The LOD of entry k is at byte 8+5k: 1 is low, 2 is medium, 3 is high. This was confirmed on the sensor and in a physical test.
+
+Button action format (4 bytes):
+
+| Bytes | Action |
+|---|---|
+| `80 01 00 <mask>` | Click: 01 left, 02 right, 04 middle, 08 back, 10 forward |
+| `80 02 <mod> <key>` | HID key with modifiers |
+| `80 03 <hi> <lo>` | Media (16-bit code) |
+| `90 <code> 00 00` | Special: 03 next DPI, 04 previous DPI, 05 cycle DPI, 06 default DPI, 07 shift DPI, 08 next profile, 09 previous profile, 0a cycle profile, 0b G-Shift |
+| `00 <sector> 00 <offset>` | Macro in sector 6..15, from the offset |
+| `ff ff ff ff` | Off |
+
+Only 05 and 07 were tested. The other codes come from libratbag.
+
+### Macros
+
+Each macro lives in a sector from 6 to 15, with 253 usable bytes and the CRC in the last 2. Items are 3 bytes: `43 <mod> <key>` key down, `44 <mod> <key>` key up, `40 <ms hi> <ms lo>` wait (milliseconds, big-endian) and `ff` marks the end. Items can cross 16-byte blocks (tested). A macro sector requires a CRC: writing without one gives HID++ error 0x4. An empty macro sector is all `ff` with a CRC.
+
+When the mouse changes DPI level, it announces it with the HID++ event `11 01 0d 10 <level>`.
 
 The rate values are indexes:
 
@@ -166,11 +194,11 @@ This is how it was shown:
 
 ## Why Solaar fails
 
-Solaar assumes the older profile layout: DPI in 2 bytes starting at byte 3 and polling only in byte 0. In the PRO X 2's format 7, DPI is 5 entries of 5 bytes starting at byte 4, and the rate is in bytes 0 and 1. Solaar reads the wrong bytes and cannot change the rate while onboard memory is active.
+Solaar assumes the older profile layout: DPI in 2 bytes starting at byte 3 and polling only in byte 0. libratbag does not support profile format 7 either. In the PRO X 2's format 7, DPI is 5 entries of 5 bytes starting at byte 4, and the rate is in bytes 0 and 1. Solaar reads the wrong bytes and cannot change the rate while onboard memory is active.
 
 ## Restoring the original
 
-`prox2_backup_perfis.json` holds sectors 0..5 from before any change, that is, the factory/G Hub original. To go back to it:
+`prox2_backup_perfis.json` holds the sectors from before any change, that is, the factory/G Hub original. New backups (`prox2.py backup`) cover sectors 0..15, macros included. On restore, empty macros go back as `ff` with a CRC, and macros with a bad CRC in the file are skipped, with a warning that they were not restored (use "Restaurar" in the panel to put those slots back to the default). To go back to the original:
 
 ```
 python3 prox2.py restaurar prox2_backup_perfis.json [--sim]

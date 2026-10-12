@@ -356,6 +356,8 @@ def cmd_dpi(m, a):
 
 def regravar_original(m, sec, original):
     """Tenta uma vez regravar o conteúdo original do setor."""
+    if sec >= 6 and not crc_ok(original):
+        original = com_crc(b"\xff" * len(original))  # o mouse recusa setor de macro sem CRC
     try:
         m.gravar_verificado(sec, original)
         print(f"Setor {sec}: conteúdo original regravado.")
@@ -366,7 +368,8 @@ def regravar_original(m, sec, original):
 
 def salvar_backup(m, caminho, exclusivo=False):
     # leituras com CRC conferido; grava em temporário e publica de uma vez
-    bk = {f"{s:#06x}": m.ler_setor(s).hex() for s in range(0, 6)}
+    # setores 6..15 (macros) podem estar vazios sem CRC, então sem conferência
+    bk = {f"{s:#06x}": m.ler_setor(s, crc=s < 6).hex() for s in range(0, 16)}
     tmp = caminho + ".tmp"
     try:
         with open(tmp, "w") as f:
@@ -391,11 +394,13 @@ def cmd_restaurar(m, a):
     with open(a.arquivo) as f:
         bk = {int(k, 16): bytes.fromhex(v) for k, v in json.load(f).items()}
     difer, antes, pulados = [], {}, []
-    for sec in range(1, 6):
+    for sec in range(1, 16):
         if sec not in bk:
             continue
         if len(bk[sec]) != m.size:
             sys.exit(f"Setor {sec} do arquivo inválido (tamanho). Nada foi gravado.")
+        if sec > 5 and bk[sec] == b"\xff" * len(bk[sec]):
+            bk[sec] = com_crc(bk[sec])  # macro vazia sem CRC volta como vazia com CRC
         if not crc_ok(bk[sec]):
             print(f"Setor {sec} do backup tem CRC inválido, pulado.")
             pulados.append(sec)
@@ -423,7 +428,8 @@ def cmd_restaurar(m, a):
                 print(f"Setor {sec}: falha ao gravar ({e}).")
                 regravar_original(m, sec, antes[sec])
                 sys.exit(1)
-            m.definir_perfil(sec)
+            if sec <= 5:
+                m.definir_perfil(sec)
             print(f"Setor {sec}: restaurado e verificado.")
     finally:
         m.definir_perfil(original)
