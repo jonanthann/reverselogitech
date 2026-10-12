@@ -1,0 +1,2 @@
+# Acesso ao hidraw do receptor Lightspeed (046d:c54d) para o usuário logado, sem sudo nem chmod.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c54d", TAG+="uaccess"
