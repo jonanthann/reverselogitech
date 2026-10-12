@@ -12,12 +12,14 @@ Uso:
 """
 import argparse, contextlib, errno, fcntl, json, os, queue, select, struct, sys, tempfile, threading, time
 
+import caminhos
+
 SWID = 0x0A
 RATES = [125, 250, 500, 1000, 2000, 4000, 8000]
 # faixas de DPI do sensor 0 (feature 0x2202): (início, fim, passo)
 DPI_FAIXAS = [(100, 200, 1), (200, 500, 2), (500, 1000, 5), (1000, 2000, 10), (2000, 5000, 20),
               (5000, 10000, 50), (10000, 20000, 100), (20000, 32000, 125), (32000, 44000, 200)]
-BACKUP_PADRAO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prox2_backup_perfis.json")
+BACKUP_PADRAO = caminhos.arquivo_backup()
 
 
 def crc16(data):
@@ -677,6 +679,7 @@ def salvar_backup(m, caminho, exclusivo=False):
     # leituras com CRC conferido; grava em temporário e publica de uma vez
     # setores 6..15 (macros) podem estar vazios sem CRC, então sem conferência
     bk = {f"{s:#06x}": m.ler_setor(s, crc=s < 6).hex() for s in range(0, 16)}
+    os.makedirs(os.path.dirname(os.path.abspath(caminho)), exist_ok=True)
     tmp = caminho + ".tmp"
     try:
         with open(tmp, "w") as f:
@@ -756,7 +759,7 @@ def cmd_painel(m, a):
     import webbrowser
     from painel_core import Painel
     from painel_web import criar_servidor, servir
-    pasta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "painel_dados")
+    pasta = caminhos.pasta_painel()
     srv, url = criar_servidor(Painel(m, pasta), a.porta)
     print("Painel em:", url, flush=True)
     print("Ctrl+C para encerrar (fecha sozinho 120 s depois de fechar a página).")
@@ -766,6 +769,7 @@ def cmd_painel(m, a):
 
 
 def main():
+    caminhos.migrar(os.path.dirname(os.path.abspath(__file__)))
     p = argparse.ArgumentParser(description="Polling rate do PRO X 2 Superlight (perfis onboard)")
     sp = p.add_subparsers(dest="cmd", required=True)
     sp.add_parser("status").set_defaults(f=cmd_status)

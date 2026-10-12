@@ -2,6 +2,8 @@
 import os
 import time
 
+import caminhos
+
 APP_ID = "io.github.jonanthann.myproX2"
 ESTADOS_PT = {"descarregando": "descarregando", "carregando": "carregando",
               "carregando_devagar": "carregando devagar", "completa": "carga completa", "erro": "erro"}
@@ -76,8 +78,15 @@ def conteudo_desktop(exec_cmd="myprox2 %U"):
     )
 
 
-def conteudo_autostart(script):
-    return conteudo_desktop(f'python3 {escapar_exec(script)} --background').replace("StartupNotify=true\n", "") \
+def comando_app(raiz):
+    """Comando do app: 'myprox2' se instalado pelo pacote, senão python3 com o myprox2.py da raiz."""
+    if caminhos.instalado(raiz):
+        return "myprox2"
+    return f'python3 {escapar_exec(os.path.join(raiz, "myprox2.py"))}'
+
+
+def conteudo_autostart(comando):
+    return conteudo_desktop(f'{comando} --background').replace("StartupNotify=true\n", "") \
         + "X-GNOME-Autostart-enabled=true\n"
 
 
@@ -97,14 +106,26 @@ def autostart_ativo(base=None):
     return os.path.exists(caminho_autostart(base))
 
 
-def definir_autostart(ativo, script, base=None):
+def definir_autostart(ativo, comando, base=None):
     c = caminho_autostart(base)
     if ativo:
         os.makedirs(os.path.dirname(c), exist_ok=True)
         with open(c, "w") as f:
-            f.write(conteudo_autostart(script))
+            f.write(conteudo_autostart(comando))
     elif os.path.exists(c):
         os.remove(c)
+
+
+def atualizar_autostart(comando, base=None):
+    """Regrava o autostart ativo cujo Exec difere do comando atual. Devolve True se regravou."""
+    c = caminho_autostart(base)
+    if not os.path.exists(c):
+        return False
+    with open(c) as f:
+        if f"Exec={comando} --background\n" in f.read():
+            return False
+    definir_autostart(True, comando, base)
+    return True
 
 
 def _destinos(base=None):
@@ -119,9 +140,8 @@ def instalar_local(raiz, base=None):
     d, i = _destinos(base)
     os.makedirs(os.path.dirname(d), exist_ok=True)
     os.makedirs(os.path.dirname(i), exist_ok=True)
-    script = os.path.join(raiz, "myprox2.py")
     with open(d, "w") as f:
-        f.write(conteudo_desktop(f'python3 {escapar_exec(script)} %U'))
+        f.write(conteudo_desktop(f'{comando_app(raiz)} %U'))
     shutil.copyfile(os.path.join(raiz, "data", "icons", APP_ID + ".svg"), i)
     return d, i
 

@@ -45,11 +45,23 @@ class TestAppPuro(unittest.TestCase):
             self.assertTrue(os.path.exists(i))
             self.assertEqual(len(puro.desinstalar_local(t)), 2)
             self.assertFalse(puro.autostart_ativo(t))
-            puro.definir_autostart(True, "/x/myprox2.py", t)
+            puro.definir_autostart(True, "myprox2", t)
             self.assertTrue(puro.autostart_ativo(t))
             self.assertIn("--background", open(puro.caminho_autostart(t)).read())
-            puro.definir_autostart(False, "/x/myprox2.py", t)
+            puro.definir_autostart(False, "myprox2", t)
             self.assertFalse(puro.autostart_ativo(t))
+
+    def test_comando_app(self):
+        self.assertEqual(puro.comando_app("/usr/share/prox2"), "myprox2")
+        self.assertEqual(puro.comando_app(RAIZ), f'python3 {puro.escapar_exec(os.path.join(RAIZ, "myprox2.py"))}')
+
+    def test_autostart_instalado_regrava_exec_antigo(self):
+        with tempfile.TemporaryDirectory() as t:
+            self.assertFalse(puro.atualizar_autostart("myprox2", t))
+            puro.definir_autostart(True, puro.comando_app(RAIZ), t)
+            self.assertTrue(puro.atualizar_autostart("myprox2", t))
+            self.assertIn("Exec=myprox2 --background\n", open(puro.caminho_autostart(t)).read())
+            self.assertFalse(puro.atualizar_autostart("myprox2", t))
 
 
 if __name__ == "__main__":

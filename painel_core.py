@@ -158,6 +158,7 @@ class Painel:
             except IOError:
                 d = self.m.ler_setor(s, crc=False)
             bk[f"{s:#06x}"] = d.hex()
+        os.makedirs(os.path.dirname(os.path.abspath(self.backup)), exist_ok=True)
         tmp = self.backup + ".tmp"
         try:
             with open(tmp, "w") as f:

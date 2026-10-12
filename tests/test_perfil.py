@@ -6,7 +6,7 @@ import perfil
 from prox2 import crc_ok
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-with open(os.path.join(RAIZ, "prox2_backup_perfis.json")) as f:
+with open(os.path.join(RAIZ, "tests", "dados", "prox2_backup_perfis.json")) as f:
     B = {k: bytes.fromhex(v) for k, v in json.load(f).items()}
 S0, S1, S3 = B["0x0000"], B["0x0001"], B["0x0003"]
 

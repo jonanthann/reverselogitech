@@ -14,7 +14,7 @@ def _servico_falso(simular, carga):
     import tempfile
     from app.servico import Servico
     from tests.mouse_falso import MouseFalso
-    with open(os.path.join(RAIZ, "prox2_backup_perfis.json")) as f:
+    with open(os.path.join(RAIZ, "tests", "dados", "prox2_backup_perfis.json")) as f:
         setores = {int(k, 16): bytes.fromhex(v) for k, v in json.load(f).items()}
     setores.update({n: b"\xff" * 255 for n in range(6, 16)})
     tmp = tempfile.mkdtemp(prefix="myprox2-falso-")
@@ -22,8 +22,12 @@ def _servico_falso(simular, carga):
 
 
 def main(argv):
+    import caminhos
     from app import puro
     if "instalar-local" in argv:
+        if caminhos.instalado(RAIZ):
+            print("O myproX2 já está instalado pelo pacote.")
+            return 1
         for c in puro.instalar_local(RAIZ):
             print("Gravado:", c)
         return 0
@@ -45,6 +49,8 @@ def main(argv):
         else:
             resto.append(argv[i])
         i += 1
+    if not falso:
+        caminhos.migrar(RAIZ)
     import gi
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")

@@ -1,0 +1,18 @@
+Source: prox2
+Section: utils
+Priority: optional
+Maintainer: jonanthann <163675706+jonanthann@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13), dh-sequence-python3, python3:any
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+
+Package: prox2
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}, python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1
+Recommends: gnome-shell-extension-appindicator
+Description: Tools for the Logitech PRO X 2 mouse (CLI, local panel and GNOME app)
+ Command line tool, local web panel and a native GNOME app (myproX2) to read
+ the battery and edit the onboard profiles of the Logitech PRO X 2 wireless
+ mouse through its Lightspeed receiver.
+ .
+ Includes a udev rule that gives the logged-in user access to the receiver.

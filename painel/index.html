@@ -556,11 +556,17 @@ function desenharMacros() {
 // mEd: { sec, modo, passos, texto, espera, para }
 function abrirMacro(m, para) {
   mEd = { sec: m ? m.sec : null, modo: "passos", passos: m && m.estado === "ok" ? m.passos.map(p => Object.assign({}, p)) : [],
-    texto: "", espera: 30, para };
+    texto: "", espera: 30, para, vaga: sel, alvo: para && est ? est.botoes[para.cam][para.i] : null };
   desenharMEdit();
   $("medit").scrollIntoView({ block: "nearest" });
 }
 $("nova-macro").onclick = () => abrirMacro(null, null);
+
+// O destino só vale se a vaga e o botão continuam como estavam ao abrir o editor.
+function destinoMacro(m) {
+  const p = m.para;
+  return p && est && sel === m.vaga && est.botoes[p.cam][p.i] === m.alvo ? p : null;
+}
 
 function desenharMEdit() {
   const box = $("medit"); box.textContent = "";
@@ -596,8 +602,8 @@ function desenharMEdit() {
   salvar.onclick = salvarMacro;
   const canc = el("button", { className: "acao", textContent: "Cancelar" });
   canc.onclick = () => {
-    const p = mEd.para;
-    if (p && p.antes && est) { est.botoes[p.cam][p.i] = p.antes; desenharBotoes(); }
+    const p = destinoMacro(mEd);
+    if (p && p.antes) { est.botoes[p.cam][p.i] = p.antes; desenharBotoes(); }
     mEd = null; box.hidden = true; };
   box.append(el("div", { className: "linha" }, salvar, canc));
   travar(ocupado);
@@ -638,11 +644,12 @@ async function salvarMacro() {
     if (mEd.passos.some(p => p.tipo === "espera" ? !(p.ms >= 1 && p.ms <= 65535) : !p.tecla)) return status("Confira os passos: espera de 1 a 65535 ms.", "erro");
     c = { passos: mEd.passos.map(p => p.tipo === "espera" ? { tipo: "espera", ms: p.ms } : { tipo: p.tipo, mod: p.mod, tecla: p.tecla }) };
   }
-  const para = mEd.para;
+  const ed = mEd;
   const r = await fazer(() => api("POST", "/api/macros" + (mEd.sec === null ? "" : "/" + mEd.sec), c), "Macro gravada", true);
   if (!r) return;
   mEd = null; $("medit").hidden = true;
-  if (para && est) {
+  const para = destinoMacro(ed);
+  if (para) {
     est.botoes[para.cam][para.i] = { tipo: "macro", sec: r.sec, offset: 0 };
     desenharBotoes();
   }

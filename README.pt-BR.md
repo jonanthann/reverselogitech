@@ -7,11 +7,11 @@ Engenharia reversa do protocolo HID++ do Logitech PRO X 2 Superlight (sem fio, r
 O `/dev/hidraw` do receptor costuma vir só para root. Para liberar o acesso ao seu usuário, instale a regra udev do repositório:
 
 ```
-sudo cp udev/70-prox2-hidraw.rules /etc/udev/rules.d/
+sudo cp udev/60-prox2.rules /etc/udev/rules.d/
 sudo udevadm control --reload && sudo udevadm trigger
 ```
 
-Depois, reconecte o receptor. Como alternativa temporária, `sudo chmod a+rw /dev/hidraw6` (o número varia) ou rodar os comandos com sudo.
+Depois, reconecte o receptor. Se você copiou a antiga `70-prox2-hidraw.rules` para `/etc/udev/rules.d/`, apague-a. Como alternativa temporária, `sudo chmod a+rw /dev/hidraw6` (o número varia) ou rodar os comandos com sudo.
 
 ## O problema
 
@@ -30,7 +30,11 @@ Os perfis 1 e 2 ficaram em 2000 Hz e 1600 DPI, gravados na memória interna. A c
 | Arquivo | Para que serve |
 |---|---|
 | `prox2.py` | Ferramenta principal: status, trocar taxa e DPI, backup e restauração. Com o hidraw liberado, roda sem sudo. |
-| `prox2_backup_perfis.json` | Backup dos setores 0..5 de antes de qualquer alteração (original de fábrica/G Hub). |
+| `tests/dados/prox2_backup_perfis.json` | Exemplo para testes: backup dos setores 0..5 de antes de qualquer alteração (original de fábrica/G Hub). O seu backup fica em `~/.local/share/myproX2/`. |
+| `myprox2.py`, `app/` | App GNOME myproX2. |
+| `caminhos.py` | Pastas de dados e configuração (XDG). |
+| `debian/` | Empacotamento do `.deb`. |
+| `LICENSE` | Licença MIT. |
 | `testar_polling_raw.py` | Conta pacotes crus do receptor por 10 s. Com o hidraw liberado, roda sem sudo. É a melhor forma de medir. |
 | `testar_polling.py` | Mede pelo evdev. Precisa de sudo. |
 | `testar_host_mode.py` | Diagnóstico: testa a taxa em modo host. |
@@ -39,7 +43,7 @@ Os perfis 1 e 2 ficaram em 2000 Hz e 1600 DPI, gravados na memória interna. A c
 | `acoes.py` | Ações de botão (4 bytes) e macros. |
 | `perfil.py` | Leitura e montagem dos setores de perfil. |
 | `painel/index.html` | Página do painel. |
-| `udev/70-prox2-hidraw.rules` | Regra udev que libera o hidraw do receptor para o seu usuário. |
+| `udev/60-prox2.rules` | Regra udev que libera o hidraw do receptor para o seu usuário. |
 | `tests/` | Testes, rodam com `python3 -m unittest discover -s tests`. Não usam o mouse. |
 
 ## Uso rápido
@@ -61,7 +65,7 @@ python3 prox2.py restaurar arquivo.json [--sim]
 - `backup` salva os setores 0..15 (perfis e macros) num arquivo JSON.
 - `restaurar` grava de volta os perfis de um arquivo JSON. A opção `--sim` é opcional. Setores do arquivo com CRC inválido são pulados com aviso, e os demais são restaurados.
 
-Na primeira gravação, o `prox2.py` cria o backup automático `prox2_backup_perfis.json`. Se o arquivo já existir, ele não é sobrescrito.
+Na primeira gravação, o `prox2.py` cria o backup automático `prox2_backup_perfis.json` na pasta de dados (veja "Onde ficam os dados"). Se o arquivo já existir, ele não é sobrescrito.
 
 Taxas acima de 2000 Hz consomem mais bateria. O firmware (MPM 32.05) suporta 4000 e 8000 Hz, mas essas taxas não foram testadas.
 
@@ -87,9 +91,168 @@ Macros: ficam nos setores 6..15, são listadas numa seção própria (criar, edi
 
 Limites: não dá para desligar a vaga em uso nem a última ativa.
 
-Segurança: antes da primeira gravação, o backup original vai para `prox2_backup_perfis.json`. Se o backup antigo tiver só os setores 0..5, os setores de macro 6..15 vão uma vez para `painel_dados/backup_macros.json`. Uma cópia de cada setor anterior vai para `painel_dados/historico/`.
+Segurança: antes da primeira gravação, o backup original vai para `~/.local/share/myproX2/prox2_backup_perfis.json`. Se o backup antigo tiver só os setores 0..5, os setores de macro 6..15 vão uma vez para `~/.local/share/myproX2/painel_dados/backup_macros.json`. Uma cópia de cada setor anterior vai para `~/.local/share/myproX2/painel_dados/historico/`.
 
 A interface do painel é em português, como o resto do programa.
+
+## Onde ficam os dados
+
+Os dados graváveis ficam em `~/.local/share/myproX2/` (ou `$XDG_DATA_HOME/myproX2`): o backup `prox2_backup_perfis.json` e a pasta `painel_dados/`. Na primeira execução pelo repositório, os antigos da raiz do repositório são copiados para lá (os originais ficam onde estão). Essa cópia não acontece quando o código está instalado pelo `.deb`.
+
+## App myproX2 (GNOME)
+
+App nativo do GNOME (GTK 4 e libadwaita) sobre o mesmo código do `prox2.py`. Precisa de `python3-gi`, `gir1.2-gtk-4.0` e `gir1.2-adw-1`. Para o ícone na barra no GNOME, instale `gnome-shell-extension-appindicator`.
+
+- Mostra a bateria do mouse, com ícone na barra superior (bandeja) e notificações.
+- Janela com as vagas (perfis) e o DPI.
+- Aba "Botões": os 5 botões em 2 camadas, normal e G-Shift.
+- Aba "Macros".
+- "Iniciar com a sessão" no menu.
+
+```
+python3 myprox2.py
+python3 myprox2.py --background
+python3 myprox2.py --falso
+python3 myprox2.py instalar-local
+python3 myprox2.py desinstalar-local
+```
+
+- Sem opções, abre a janela.
+- `--background` inicia sem janela, só o ícone na barra.
+- `--falso` usa um mouse simulado em memória. Não toca no mouse real, então é seguro para testar a interface.
+- `--simular-bateria N` e `--simular-carga` simulam o nível de bateria e a carga.
+- `instalar-local` coloca o app no menu do seu usuário (`.desktop` e ícone) apontando para este repositório. `desinstalar-local` remove. O `instalar-local` se recusa a rodar quando o app veio do `.deb`.
+
+## Pacote `.deb`
+
+A pasta `debian/` gera o pacote `prox2`, que instala os comandos `prox2` e `myprox2`, a regra udev e a entrada no menu.
+
+Dependências de build:
+
+```
+sudo apt install build-essential debhelper dh-python lintian
+```
+
+Compilar (o `.deb` sai na pasta pai):
+
+```
+dpkg-buildpackage -us -uc -b
+```
+
+Antes de instalar, rode `python3 myprox2.py desinstalar-local` e apague a regra udev manual antiga (`/etc/udev/rules.d/70-prox2-hidraw.rules`). Depois:
+
+```
+sudo apt install ./prox2_0.1.0_all.deb
+```
+
+Dependências de execução: `python3`, `python3-gi`, `gir1.2-gtk-4.0` e `gir1.2-adw-1` (recomendado: `gnome-shell-extension-appindicator`). Para remover: `sudo apt purge prox2`. Seus dados em `~/.local/share/myproX2/` ficam.
+
+## Manual de uso do myproX2
+
+Passo a passo para usar o app no dia a dia. A instalação está em "Pacote `.deb`" e o formato dos dados em "O que foi descoberto".
+
+### Primeiros passos
+
+1. Instale o `.deb` (veja "Pacote `.deb`") e reconecte o receptor, para a regra udev valer.
+2. Ligue o mouse e abra o **myproX2** pelo menu de aplicativos. Ou rode `myprox2` no terminal.
+3. Para ver o ícone na barra superior do GNOME, instale `gnome-shell-extension-appindicator` e ative a extensão. Sem ela o app funciona, só que sem o ícone.
+
+Fechar a janela não encerra o app: ele continua na barra, lendo a bateria. Para abrir de novo, clique no ícone ou use "Abrir myproX2" no menu dele. Para encerrar de vez, veja "Fechar o app".
+
+### Ícone na barra e bateria
+
+O ícone mostra a carga do mouse. Passe o ponteiro por cima para ver a porcentagem e o estado (descarregando, carregando, carga completa). Se o mouse estiver desconectado, o texto mostra a hora da última leitura. O menu do ícone tem a bateria, "Abrir myproX2" e "Sair".
+
+O app avisa por notificação quando:
+
+- a bateria cai abaixo de 20% ("Bateria baixa");
+- cai abaixo de 10% ("Bateria crítica", com urgência alta);
+- o mouse termina de carregar ("Bateria carregada").
+
+Cada aviso aparece uma vez por descarga. Ao colocar o mouse para carregar, os avisos de bateria baixa são zerados.
+
+### Aba Vagas: DPI e perfil
+
+A janela tem três abas embaixo: Vagas, Botões e Macros. No topo ficam a bateria e o estado (Conectado ou Desconectado). Com o mouse desconectado, a janela não deixa editar nada.
+
+1. Na aba **Vagas**, clique no cartão da vaga (perfil) que quer editar. Cada cartão mostra o nome, os níveis de DPI, a taxa em Hz e se a vaga está em uso, ativa ou desligada.
+2. Em "Níveis de DPI", mude o valor de cada nível (de 100 a 44000). "Adicionar nível" cria mais um (até 5) e "Remover" tira o nível. Marque **Padrão** no nível que o mouse usa ao ligar e **Shift** no que vale com a ação "DPI shift".
+3. Ajuste o polling, o LOD e o nome (até 24 caracteres, gravado no mouse). A chave "Vaga ativa" liga ou desliga a vaga.
+4. Clique em **Gravar no mouse**. Quando der certo, aparece "Gravado e verificado": o app grava e relê o setor para conferir.
+
+Os outros botões da vaga:
+
+- **Usar agora** troca o perfil em uso. A escolha continua depois de desligar o mouse. Uma vaga desligada não pode ser usada.
+- **Restaurar** pergunta antes e volta a vaga ao padrão de fábrica (há backup para desfazer).
+
+Se você mudou algo e tenta trocar de vaga ou usar outra, o app pergunta "Descartar alterações?". Escolha "Descartar" para abrir mão das mudanças ou "Cancelar" para voltar e gravar. Se o mouse for reconectado com mudanças pendentes, elas são descartadas, com um aviso.
+
+Não dá para desligar a vaga em uso nem a última vaga ativa.
+
+### Aba Botões
+
+Mostra os 5 botões (esquerdo, direito, meio, trás e frente) da vaga selecionada, em duas camadas: **Camada normal** e **G-Shift**. A G-Shift só vale quando algum botão está com a ação especial "G-Shift".
+
+Para cada botão, escolha o tipo:
+
+- **Clique**: esquerdo, direito, meio, trás ou frente.
+- **Tecla**: clique no campo, aperte a tecla desejada (aparece "Pressione...") e marque os modificadores, se precisar. Teclas que o mouse não suporta mostram "Tecla não suportada".
+- **Mídia**: play/pausa, próxima faixa, faixa anterior, volume + e -, mudo.
+- **Especial**: próximo DPI, DPI anterior, ciclar DPI, DPI padrão, DPI shift, próximo perfil, perfil anterior, ciclar perfil e G-Shift. Só "Ciclar DPI" e "DPI shift" foram testados no mouse; os outros aparecem com "(não testado)".
+- **Macro**: escolha uma macro pronta ou crie uma em "Nova macro...".
+- **Desligado**: o botão não faz nada.
+
+A camada normal precisa ter ao menos um botão com clique esquerdo. Se não tiver, o app recusa a gravação e avisa. Depois de mexer, clique em **Gravar no mouse** nesta aba.
+
+### Aba Macros
+
+Lista as macros do mouse (até 10), com o estado (Vazia, Pronta ou Inválida) e quais botões usam cada uma.
+
+1. Clique em **Nova macro**, ou em **Editar** numa existente.
+2. No modo **Passos**, adicione "aperta", "solta" ou "espera" (em ms) e escolha a tecla de cada passo. Dá para subir, descer e remover passos. Toda tecla apertada precisa ser solta até o fim.
+3. No modo **Texto**, digite o texto e a espera entre as teclas. Só letras, números e espaço, sem acentos.
+4. Clique em **Salvar macro**. Aparece "Gravado e verificado". Depois, atribua a macro a um botão na aba Botões.
+5. **Apagar** esvazia o setor, depois de pedir confirmação. O botão fica bloqueado enquanto algum botão usar a macro: troque a ação do botão e grave antes.
+
+### Iniciar com a sessão
+
+No menu da janela (ícone de três linhas, no canto), marque **Iniciar com a sessão**. O app passa a abrir sozinho no login, sem janela, só com o ícone na barra. Desmarque para desligar.
+
+### Backup e restauração
+
+Na primeira gravação, o app guarda o estado original do mouse em `~/.local/share/myproX2/prox2_backup_perfis.json`. Esse arquivo não é sobrescrito. Uma cópia de cada setor trocado vai para `~/.local/share/myproX2/painel_dados/historico/`.
+
+Para voltar ao original, com o app fechado:
+
+```
+prox2 restaurar ~/.local/share/myproX2/prox2_backup_perfis.json
+```
+
+Para guardar o estado atual: `prox2 backup meu_backup.json`. Veja "Restaurar o original" para os detalhes.
+
+### Testar sem mexer no mouse
+
+```
+myprox2 --falso
+```
+
+Abre o app com um mouse simulado em memória (bateria em 80%). Nada é gravado no mouse real e os dados somem ao fechar. Serve para conhecer a interface. Com `--simular-bateria N` e `--simular-carga` dá para ver as notificações de bateria.
+
+### Solução de problemas
+
+**Mouse não encontrado ou sem permissão.** A janela mostra "Desconectado" ou "Mouse desconectado". Confira se o mouse está ligado e o receptor no USB. Se o problema for permissão, instale a regra udev (pelo `.deb` ela já vem) e reconecte o receptor. Veja o começo deste README.
+
+**"Outro programa (CLI, painel ou app) está gravando no mouse".** Só um programa grava por vez, usando uma trava em `$XDG_RUNTIME_DIR/myprox2.lock`. Espere alguns segundos e tente de novo. Se continuar, feche o painel web ou o `prox2` que estiver rodando. Programas que pegam o mouse com exclusividade (como o OpenLogi) também atrapalham.
+
+**O ícone não aparece na barra.** Instale e ative `gnome-shell-extension-appindicator`, depois saia e entre de novo na sessão. O app funciona sem o ícone, mas aí só dá para abri-lo pelo menu de aplicativos.
+
+**Fechar o app.** Fechar a janela só a esconde. Para encerrar:
+
+- "Sair" no menu da janela ou no menu do ícone;
+- `Ctrl+C` no terminal onde ele foi aberto;
+- `pkill -f myprox2`, se não houver outra opção.
+
+O app ignora `Ctrl+Z`: ele não fica suspenso, para não segurar o mouse sem poder ser fechado. Se uma versão antiga ficou presa por causa do `Ctrl+Z`, descubra o PID com `pgrep -f myprox2` e rode `kill -CONT <pid>; kill <pid>`.
 
 ## Como medir
 
@@ -196,15 +359,19 @@ O Solaar assume o layout antigo de perfil: DPI em 2 bytes a partir do byte 3 e p
 
 ## Restaurar o original
 
-O `prox2_backup_perfis.json` guarda os setores de antes de qualquer alteração, ou seja, o original de fábrica/G Hub. Backups novos (`prox2.py backup`) cobrem os setores 0..15, incluindo as macros. Na restauração, macros vazias voltam como `ff` com CRC, e macros com CRC ruim no arquivo são puladas, com aviso de que não foram restauradas (use "Restaurar" no painel para voltar essas vagas ao padrão). Para voltar ao original:
+O `~/.local/share/myproX2/prox2_backup_perfis.json` guarda os setores de antes de qualquer alteração, ou seja, o original de fábrica/G Hub. Backups novos (`prox2.py backup`) cobrem os setores 0..15, incluindo as macros. Na restauração, macros vazias voltam como `ff` com CRC, e macros com CRC ruim no arquivo são puladas, com aviso de que não foram restauradas (use "Restaurar" no painel para voltar essas vagas ao padrão). Para voltar ao original:
 
 ```
-python3 prox2.py restaurar prox2_backup_perfis.json [--sim]
+python3 prox2.py restaurar ~/.local/share/myproX2/prox2_backup_perfis.json [--sim]
 ```
 
 ## Como foi feito
 
 A engenharia reversa foi feita com a ajuda do [Claude Code](https://claude.com/claude-code). Ele leu e comparou os setores da memória interna, consultou as features HID++ do mouse e escreveu e revisou os scripts. Cada gravação foi conferida no mouse real, relendo o setor e medindo a taxa de pacotes.
+
+## Licença
+
+MIT, veja [LICENSE](LICENSE).
 
 ## Aviso legal
 

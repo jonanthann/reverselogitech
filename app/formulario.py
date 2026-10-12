@@ -55,3 +55,44 @@ def argumentos(inicial, atual):
             raise ValueError(f"O nome pode ter no máximo {MAX_NOME} caracteres.")
         r["nome"] = atual["nome"]
     return r
+
+
+NOMES_BOTOES = ("Esquerdo", "Direito", "Meio", "Trás", "Frente")
+
+
+def limpa_acao(a):
+    """Só os campos que o Painel aceita (como `limpa` no painel web)."""
+    t = a["tipo"]
+    o = {"tipo": t}
+    if t == "clique":
+        o["botao"] = a["botao"]
+    elif t == "tecla":
+        o["mod"], o["tecla"] = a["mod"], a["tecla"]
+    elif t in ("midia", "especial"):
+        o["codigo"] = a["codigo"]
+    elif t == "macro":
+        o["sec"], o["offset"] = a["sec"], a.get("offset", 0)
+    elif t == "bruto":
+        o["hex"] = a["hex"]
+    return o
+
+
+def argumentos_botoes(inicial, atual, macros):
+    """Argumentos botoes/gshift de Painel.gravar; {} se nada mudou. inicial e atual: [normal, gshift]."""
+    ini = [[limpa_acao(a) for a in c] for c in inicial]
+    novo = [[limpa_acao(a) for a in c] for c in atual]
+    if novo == ini:
+        return {}
+    prontas = {m["sec"] for m in macros if m["estado"] == "ok"}
+    for cam in range(2):
+        for k, a in enumerate(novo[cam]):
+            if a["tipo"] == "macro" and a["sec"] not in prontas and a != ini[cam][k]:
+                raise ValueError(f"O botão {NOMES_BOTOES[k]} usa uma macro que não está pronta.")
+    if not any(a["tipo"] == "clique" and a["botao"] == "esquerdo" for a in novo[0]):
+        raise ValueError("A camada normal precisa de um botão com clique esquerdo.")
+    res = {}
+    if novo[0] != ini[0]:
+        res["botoes"] = novo[0]
+    if novo[1] != ini[1]:
+        res["gshift"] = novo[1]
+    return res

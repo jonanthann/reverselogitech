@@ -14,7 +14,7 @@ from painel_web import criar_servidor
 from tests.mouse_falso import MouseFalso
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-with open(os.path.join(RAIZ, "prox2_backup_perfis.json")) as f:
+with open(os.path.join(RAIZ, "tests", "dados", "prox2_backup_perfis.json")) as f:
     B = {int(k, 16): bytes.fromhex(v) for k, v in json.load(f).items()}
 
 

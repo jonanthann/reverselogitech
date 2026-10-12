@@ -1,4 +1,4 @@
-# Exec=myprox2 vale para o pacote .deb (/usr/bin/myprox2). Para rodar do repositório: python3 myprox2.py instalar-local
+# Exec=myprox2 vale para o pacote .deb (/usr/bin/myprox2). Este arquivo é só o modelo: o instalar-local grava uma cópia com o Exec absoluto.
 [Desktop Entry]
 Type=Application
 Name=myproX2

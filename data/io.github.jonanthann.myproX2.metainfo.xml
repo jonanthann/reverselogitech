@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.jonanthann.myproX2</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>myproX2</name>
+  <summary>Configure the Logitech G PRO X2 mouse</summary>
+  <description>
+    <p>Native GNOME app to edit onboard profiles, DPI levels, buttons and macros of the Logitech G PRO X2 Lightspeed mouse, and to check its battery.</p>
+  </description>
+  <developer id="io.github.jonanthann">
+    <name>jonanthann</name>
+  </developer>
+  <url type="homepage">https://github.com/jonanthann/reverselogitech</url>
+  <launchable type="desktop-id">io.github.jonanthann.myproX2.desktop</launchable>
+  <provides>
+    <modalias>usb:v046DpC54D*</modalias>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-10-12"/>
+  </releases>
+</component>

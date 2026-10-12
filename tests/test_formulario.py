@@ -42,5 +42,31 @@ class TestFormulario(unittest.TestCase):
         self.assertIs(f.de_vaga(v)["ativa"], True)
 
 
+CL = [{"tipo": "clique", "botao": b, "extra": 1} for b in ("esquerdo", "direito", "meio", "voltar", "avancar")]
+GS = [{"tipo": "desligado"}] * 5
+MACROS = [{"sec": 6, "estado": "ok"}, {"sec": 7, "estado": "vazia"}]
+
+
+class TestBotoes(unittest.TestCase):
+    def test_sem_mudanca(self):
+        self.assertEqual(f.argumentos_botoes([CL, GS], [CL, GS], MACROS), {})
+
+    def test_so_a_camada_que_mudou(self):
+        gs = [{"tipo": "tecla", "mod": 0, "tecla": 4}] + GS[1:]
+        self.assertEqual(f.argumentos_botoes([CL, GS], [CL, gs], MACROS), {"gshift": gs})
+
+    def test_exige_clique_esquerdo(self):
+        n = [{"tipo": "desligado"}] + CL[1:]
+        with self.assertRaises(ValueError):
+            f.argumentos_botoes([CL, GS], [n, GS], MACROS)
+
+    def test_macro_nao_pronta(self):
+        gs = [{"tipo": "macro", "sec": 7, "offset": 0}] + GS[1:]
+        with self.assertRaises(ValueError):
+            f.argumentos_botoes([CL, GS], [CL, gs], MACROS)
+        gs = [{"tipo": "macro", "sec": 6, "offset": 0}] + GS[1:]
+        self.assertEqual(f.argumentos_botoes([CL, GS], [CL, gs], MACROS), {"gshift": gs})
+
+
 if __name__ == "__main__":
     unittest.main()

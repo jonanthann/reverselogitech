@@ -1,0 +1,16 @@
+acoes.py usr/share/prox2
+bateria.py usr/share/prox2
+caminhos.py usr/share/prox2
+myprox2.py usr/share/prox2
+painel_core.py usr/share/prox2
+painel_web.py usr/share/prox2
+perfil.py usr/share/prox2
+prox2.py usr/share/prox2
+app usr/share/prox2
+painel usr/share/prox2
+tests/mouse_falso.py usr/share/prox2/tests
+tests/dados/prox2_backup_perfis.json usr/share/prox2/tests/dados
+debian/bin/* usr/bin
+data/*.desktop usr/share/applications
+data/icons/*.svg usr/share/icons/hicolor/scalable/apps
+data/*.metainfo.xml usr/share/metainfo

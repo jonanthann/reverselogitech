@@ -10,7 +10,7 @@ from painel_core import ErroPainel, Painel
 from tests.mouse_falso import MouseFalso
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-with open(os.path.join(RAIZ, "prox2_backup_perfis.json")) as f:
+with open(os.path.join(RAIZ, "tests", "dados", "prox2_backup_perfis.json")) as f:
     B = {int(k, 16): bytes.fromhex(v) for k, v in json.load(f).items()}
 
 
@@ -37,6 +37,18 @@ def estragar_crc(mouse, sec):
 
 
 class TestTransacao(Base):
+    def test_backup_cria_pasta_inexistente(self):
+        novo = os.path.join(self.tmp.name, "xdg", "myproX2", "bk.json")
+        self.painel.backup = novo
+        self.painel._salvar_backup()
+        self.assertTrue(os.path.isfile(novo))
+
+    def test_prox2_salvar_backup_cria_pasta_inexistente(self):
+        import prox2
+        novo = os.path.join(self.tmp.name, "xdg2", "myproX2", "bk.json")
+        prox2.salvar_backup(self.mouse, novo)
+        self.assertTrue(os.path.isfile(novo))
+
     def test_operacoes_de_escrita_usam_transacao_gravando(self):
         for op in (lambda: self.painel.gravar(1, polling_hz=500), lambda: self.painel.restaurar(2)):
             self.mouse.transacoes.clear()

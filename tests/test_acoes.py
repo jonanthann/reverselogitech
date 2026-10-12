@@ -6,7 +6,7 @@ import acoes
 from prox2 import crc_ok
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-with open(os.path.join(RAIZ, "prox2_backup_perfis.json")) as f:
+with open(os.path.join(RAIZ, "tests", "dados", "prox2_backup_perfis.json")) as f:
     B = {int(k, 16): bytes.fromhex(v) for k, v in json.load(f).items()}
 
 AB = bytes.fromhex("430004" "40001e" "440004" "40001e" "430005" "40001e" "440005" "ff")

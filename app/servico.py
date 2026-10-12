@@ -7,11 +7,12 @@ import traceback
 from gi.repository import GLib
 
 import bateria as bat
+import caminhos
 import prox2
 
 INTERVALO_REABRIR = 5
 INTERVALO_BATERIA = 300
-PASTA_DADOS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "painel_dados")
+PASTA_DADOS = caminhos.pasta_painel()
 
 
 class Servico:

@@ -14,6 +14,10 @@ class Aplicacao(Adw.Application):
     def __init__(self, simular=None, simular_carga=False, servico=None):
         super().__init__(application_id=puro.APP_ID, flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
         self.add_main_option("background", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE, "Sem janela", None)
+        # As três abaixo são tratadas no main() de myprox2.py; ficam aqui só para aparecer no --help
+        self.add_main_option("simular-bateria", 0, GLib.OptionFlags.NONE, GLib.OptionArg.INT, "Bateria simulada em N%", "N")
+        self.add_main_option("simular-carga", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE, "Simula o mouse carregando", None)
+        self.add_main_option("falso", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE, "Mouse em memória, sem tocar no hardware", None)
         self.servico = servico or Servico(simular, simular_carga)
         self.janela = None
         self._iniciado = False
@@ -45,6 +49,8 @@ class Aplicacao(Adw.Application):
             acao.connect("activate", fn)
             self.add_action(acao)
         # Ctrl+C, kill e fechamento do terminal encerram o app pelo caminho normal
+        # Ctrl+Z deixaria o app parado e surdo ao kill, segurando o mouse; ignora
+        signal.signal(signal.SIGTSTP, signal.SIG_IGN)
         for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
             GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, sig, self._ao_sinal)
         self.notificador = Notificador(self)
